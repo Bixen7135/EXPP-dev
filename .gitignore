@@ -39,3 +39,40 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# uploaded material files (keep directory, ignore contents)
+/storage/materials/*
+!/storage/materials/.gitkeep
+
+# AI assistant artifacts (local chats, prompts, and scratch context)
+.claude/
+.claude-code/
+.claude_code/
+.codex/
+.openai/
+.chatgpt/
+.cursor/
+.cursorrules
+.cline/
+.roo/
+.continue/
+.windsurf/
+.aider*
+.augment/
+
+# AI-generated scratch files in repository root
+/claude.md
+/chatgpt.md
+/gpt.md
+/codex.md
+/cursor.md
+/cline.md
+/roo.md
+/aider.md
+/gemini.md
+/copilot.md
+/progress.txt
+/decisions.md
+/tests.json
+/acceptance_checklist.json
+/requirements_traceability.json

@@ -1,0 +1,441 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions           Session[]
+  auditEvents        AuditEvent[]
+  materials          Material[]
+  materialFolders    MaterialFolder[]
+  generationRequests GenerationRequest[]
+  assignments        Assignment[]
+  distributions      AssignmentDistribution[] @relation("TeacherDistributions")
+  recipientRecords   AssignmentRecipient[]    @relation("StudentRecipients")
+  attempts           Attempt[]                @relation("StudentAttempts")
+  helpRequests       HelpRequest[]            @relation("StudentHelpRequests")
+  assessments        Assessment[]             @relation("TeacherAssessments")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  context    Json?
+  traceId    String
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([traceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+enum MaterialStatus {
+  PROCESSING
+  READY
+  ERROR
+}
+
+model Material {
+  id               String         @id @default(cuid())
+  teacherId        String
+  folderId         String?
+  title            String
+  originalFilename String
+  mimeType         String
+  fileSize         Int
+  storagePath      String
+  extractedText    String?
+  status           MaterialStatus @default(PROCESSING)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  teacher User            @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  folder  MaterialFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  tags    MaterialTag[]
+
+  @@index([teacherId])
+  @@index([folderId])
+  @@map("materials")
+}
+
+model MaterialFolder {
+  id        String    @id @default(cuid())
+  teacherId String
+  name      String
+  parentId  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  teacher  User             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  parent   MaterialFolder?  @relation("MaterialFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children MaterialFolder[] @relation("MaterialFolderTree")
+  materials Material[]
+
+  @@index([teacherId])
+  @@index([parentId])
+  @@index([teacherId, parentId])
+  @@map("material_folders")
+}
+
+model MaterialTag {
+  id         String @id @default(cuid())
+  materialId String
+  key        String
+  value      String
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@map("material_tags")
+}
+
+enum GenerationStatus {
+  PENDING
+  PLANNING
+  GENERATING
+  READY
+  ERROR
+}
+
+model GenerationRequest {
+  id          String           @id @default(cuid())
+  teacherId   String
+  status      GenerationStatus @default(PENDING)
+  constraints Json
+  materialIds String[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user   User              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  plan   GenerationPlan?
+  result GenerationResult?
+
+  @@index([teacherId])
+  @@map("generation_requests")
+}
+
+model GenerationPlan {
+  id        String   @id @default(cuid())
+  requestId String   @unique
+  outline   Json
+  createdAt DateTime @default(now())
+
+  request GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("generation_plans")
+}
+
+model GenerationResult {
+  id        String   @id @default(cuid())
+  requestId String   @unique
+  content   Json
+  format    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  request     GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@map("generation_results")
+}
+
+// ── Phase 4: Editing & Versioning ─────────────────────────────────────────
+
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHABLE
+  ASSIGNED
+}
+
+model Assignment {
+  id                 String           @id @default(cuid())
+  teacherId          String
+  generationResultId String?
+  title              String
+  content            Json
+  status             AssignmentStatus @default(DRAFT)
+  currentVersionId   String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  teacher          User               @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  generationResult GenerationResult?  @relation(fields: [generationResultId], references: [id], onDelete: SetNull)
+  versions         AssignmentVersion[]
+  items            AssignmentItem[]
+  distributions    AssignmentDistribution[]
+
+  @@index([teacherId])
+  @@map("assignments")
+}
+
+model AssignmentVersion {
+  id                String   @id @default(cuid())
+  assignmentId      String
+  versionNumber     Int
+  content           Json
+  authorId          String
+  changeDescription String?
+  createdAt         DateTime @default(now())
+
+  assignment    Assignment               @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  distributions AssignmentDistribution[]
+
+  @@index([assignmentId])
+  @@map("assignment_versions")
+}
+
+model AssignmentItem {
+  id             String @id @default(cuid())
+  assignmentId   String
+  order          Int
+  type           String
+  question       Json
+  expectedAnswer Json
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+  @@map("assignment_items")
+}
+
+// ── Phase 5: Distribution, Completion & AI Help ────────────────────────────
+
+enum AiHelpMode {
+  NO_HELP
+  CLARIFICATION
+  GUIDED
+  POST_ASSESSMENT
+}
+
+enum DistributionStatus {
+  MANDATORY
+  PRACTICE
+}
+
+enum RecipientStatus {
+  PENDING
+  ACTIVE
+  SUBMITTED
+}
+
+enum AttemptStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum HelpRequestStatus {
+  ALLOWED
+  BLOCKED
+}
+
+model AssignmentDistribution {
+  id           String             @id @default(cuid())
+  assignmentId String
+  versionId    String
+  teacherId    String
+  deadline     DateTime?
+  status       DistributionStatus @default(MANDATORY)
+  isGraded     Boolean            @default(true)
+  aiHelpMode   AiHelpMode         @default(NO_HELP)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  assignment Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  version    AssignmentVersion @relation(fields: [versionId], references: [id])
+  teacher    User              @relation("TeacherDistributions", fields: [teacherId], references: [id], onDelete: Cascade)
+  recipients AssignmentRecipient[]
+
+  @@index([assignmentId])
+  @@index([teacherId])
+  @@map("assignment_distributions")
+}
+
+model AssignmentRecipient {
+  id             String          @id @default(cuid())
+  distributionId String
+  studentId      String
+  status         RecipientStatus @default(PENDING)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  distribution AssignmentDistribution @relation(fields: [distributionId], references: [id], onDelete: Cascade)
+  student      User                   @relation("StudentRecipients", fields: [studentId], references: [id], onDelete: Cascade)
+  attempt      Attempt?
+
+  @@unique([distributionId, studentId])
+  @@index([distributionId])
+  @@index([studentId])
+  @@map("assignment_recipients")
+}
+
+model Attempt {
+  id          String        @id @default(cuid())
+  recipientId String        @unique
+  studentId   String
+  answers     Json          @default("[]")
+  status      AttemptStatus @default(DRAFT)
+  submittedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  recipient    AssignmentRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  student      User                @relation("StudentAttempts", fields: [studentId], references: [id], onDelete: Cascade)
+  helpRequests HelpRequest[]
+  assessment   Assessment?
+
+  @@index([studentId])
+  @@map("attempts")
+}
+
+model HelpRequest {
+  id              String            @id @default(cuid())
+  attemptId       String
+  studentId       String
+  mode            AiHelpMode
+  requestContent  String
+  responseContent String?
+  status          HelpRequestStatus @default(ALLOWED)
+  blockReason     String?
+  traceId         String
+  createdAt       DateTime          @default(now())
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  student User    @relation("StudentHelpRequests", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@index([studentId])
+  @@map("help_requests")
+}
+
+// ── Phase 6: Assessment & Result Publication ───────────────────────────────
+
+enum AssessmentStatus {
+  PENDING
+  AUTO_CHECKED
+  REVIEWED
+  PUBLISHED
+}
+
+enum AutoCheckStatus {
+  NOT_STARTED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum AssessmentAiRunTrigger {
+  AUTO_ON_SUBMIT
+  MANUAL_RERUN
+}
+
+enum AssessmentAiRunStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Assessment {
+  id              String           @id @default(cuid())
+  attemptId       String           @unique
+  teacherId       String
+  autoCheckResult Json?
+  autoCheckStatus AutoCheckStatus  @default(NOT_STARTED)
+  aiRecommendation Json?
+  confidence      String?
+  warnings        Json?
+  itemOverrides   Json?
+  latestAiRunId   String?
+  manualGrade     Float?
+  maxGrade        Float?
+  comment         String?
+  status          AssessmentStatus @default(PENDING)
+  reviewedAt      DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  attempt    Attempt           @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  teacher    User              @relation("TeacherAssessments", fields: [teacherId], references: [id], onDelete: Cascade)
+  latestAiRun AssessmentAiRun? @relation("LatestAssessmentAiRun", fields: [latestAiRunId], references: [id], onDelete: SetNull)
+  aiRuns     AssessmentAiRun[] @relation("AssessmentAiRuns")
+
+  @@index([teacherId])
+  @@index([attemptId])
+  @@index([autoCheckStatus])
+  @@index([latestAiRunId])
+  @@map("assessments")
+}
+
+model AssessmentAiRun {
+  id            String                 @id @default(cuid())
+  assessmentId  String
+  trigger       AssessmentAiRunTrigger
+  status        AssessmentAiRunStatus  @default(QUEUED)
+  model         String
+  promptVersion String
+  inputHash     String
+  resultJson    Json?
+  confidence    String?
+  warnings      Json?
+  error         String?
+  tokenUsage    Json?
+  traceId       String?
+  queuedAt      DateTime               @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  assessment         Assessment   @relation("AssessmentAiRuns", fields: [assessmentId], references: [id], onDelete: Cascade)
+  latestForAssessments Assessment[] @relation("LatestAssessmentAiRun")
+
+  @@index([assessmentId])
+  @@index([status])
+  @@index([trigger])
+  @@index([inputHash])
+  @@map("assessment_ai_runs")
+}
