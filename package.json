@@ -1,0 +1,65 @@
+{
+  "name": "main",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev:all:clean": "bun scripts/cleanup-dev-processes.mjs",
+    "dev:all": "bun scripts/dev-all.mjs",
+    "dev:app": "bun run db:generate && bun run db:push && bun run dev",
+    "worker:assessment-ai": "bun scripts/assessment-ai-worker.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:prepare:account-domain": "bun scripts/prepare-account-domain-global.mjs",
+    "db:push": "bun run db:prepare:account-domain && prisma db push"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.41",
+    "@prisma/adapter-pg": "^7.4.2",
+    "@prisma/client": "^7.4.2",
+    "ai": "^6.0.116",
+    "bcryptjs": "^3.0.3",
+    "bullmq": "^5.61.2",
+    "ioredis": "^5.10.0",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.11.0",
+    "next": "16.1.6",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.20.0",
+    "prisma": "^7.4.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/ioredis": "^5.0.0",
+    "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.1.4",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.0.18"
+  },
+  "ignoreScripts": [
+    "sharp",
+    "unrs-resolver"
+  ],
+  "trustedDependencies": [
+    "sharp",
+    "unrs-resolver"
+  ]
+}

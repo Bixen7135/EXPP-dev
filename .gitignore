@@ -1,0 +1,78 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# uploaded material files (keep directory, ignore contents)
+/storage/materials/*
+!/storage/materials/.gitkeep
+
+# AI assistant artifacts (local chats, prompts, and scratch context)
+.claude/
+.claude-code/
+.claude_code/
+.codex/
+.openai/
+.chatgpt/
+.cursor/
+.cursorrules
+.cline/
+.roo/
+.continue/
+.windsurf/
+.aider*
+.augment/
+
+# AI-generated scratch files in repository root
+/claude.md
+/chatgpt.md
+/gpt.md
+/codex.md
+/cursor.md
+/cline.md
+/roo.md
+/aider.md
+/gemini.md
+/copilot.md
+/progress.txt
+/decisions.md
+/tests.json
+/acceptance_checklist.json
+/requirements_traceability.json

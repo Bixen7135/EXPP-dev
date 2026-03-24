@@ -1,0 +1,1102 @@
+openapi: "3.1.0"
+info:
+  title: EXPP API
+  version: "1.0.0"
+  description: >
+    EXPP â€” Educational Workflow Platform v1.
+    All endpoints require authentication via the `expp_session` HTTP-only cookie
+    unless noted as public.
+  contact:
+    name: EXPP Project
+
+servers:
+  - url: /api
+    description: Next.js App Router API
+
+tags:
+  - name: auth
+    description: Authentication and session management
+  - name: materials
+    description: Teacher material upload and management
+  - name: generation
+    description: AI-driven assignment generation
+  - name: assignments
+    description: Assignment editing and versioning
+  - name: distribution
+    description: Assignment distribution to students
+  - name: attempts
+    description: Student attempt lifecycle (draft and submission)
+  - name: ai-help
+    description: Student AI help requests (policy-gated)
+  - name: assessment
+    description: Teacher grading and result publication
+  - name: analytics
+    description: Analytics dashboards
+  - name: admin
+    description: Admin user management and audit log
+
+# â”€â”€ Shared components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+components:
+  schemas:
+    ApiSuccess:
+      type: object
+      required: [success, data, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          description: Response payload (schema varies per endpoint)
+        traceId:
+          type: string
+
+    ApiError:
+      type: object
+      required: [success, error, code, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+        code:
+          type: string
+          enum: [AUTH_ERROR, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, RATE_LIMITED]
+        traceId:
+          type: string
+
+    AiHelpMode:
+      type: string
+      enum: [NO_HELP, CLARIFICATION, GUIDED, POST_ASSESSMENT]
+
+    AssignmentStatus:
+      type: string
+      enum: [DRAFT, PUBLISHABLE, ASSIGNED]
+
+    AssessmentStatus:
+      type: string
+      enum: [PENDING, AUTO_CHECKED, REVIEWED, PUBLISHED]
+
+    AutoCheckStatus:
+      type: string
+      enum: [NOT_STARTED, QUEUED, PROCESSING, READY, FAILED]
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: expp_session
+
+security:
+  - sessionCookie: []
+
+# â”€â”€ Paths â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+paths:
+
+  # â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new user and create a global user profile
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                name: { type: string }
+                userDisplayName:
+                  type: string
+                  description: Optional display name for the initial global user profile.
+      responses:
+        "201":
+          description: Registered. Session cookie set. Returns user and activeUser.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login with email and password
+      description: Returns user profile, activeUser, and the signed-in user list.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Authenticated. Session cookie set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "429":
+          description: Rate limited (10 req/min per IP)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout. Clears session cookie and deletes session from DB.
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Get current authenticated user and active user context
+      responses:
+        "200":
+          description: Current user, activeUser and user list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /auth/users:
+    get:
+      tags: [auth]
+      summary: List signed-in users
+      responses:
+        "200":
+          description: user list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+    post:
+      tags: [auth]
+      summary: Add another signed-in user to the current device session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        "200":
+          description: User added to signed-in list and switched active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /auth/users/switch:
+    post:
+      tags: [auth]
+      summary: Switch active user in current session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userContextId]
+              properties:
+                userContextId:
+                  type: string
+      responses:
+        "200":
+          description: Active user switched
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "403":
+          description: Attempt to switch to a user context that is not signed in on this device
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  # â”€â”€ Materials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /materials:
+    get:
+      tags: [materials]
+      summary: List teacher's materials
+      description: Teacher workspace permission required. Returns only materials owned by the authenticated teacher.
+      responses:
+        "200":
+          description: Material list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "403":
+          description: Not a teacher
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+    post:
+      tags: [materials]
+      summary: Upload a material (PDF, Word, Excel, PowerPoint, TXT, MD, CSV)
+      description: Teacher workspace permission required. Max 50 MB for binary formats and 10 MB for text formats.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+      responses:
+        "201":
+          description: Material uploaded and text extracted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Unsupported file type or size exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /materials/{id}:
+    get:
+      tags: [materials]
+      summary: Get material detail including extracted text
+      description: Teacher workspace permission required. Returns ForbiddenError if not the owner.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Material detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "403":
+          description: Not the owner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+    delete:
+      tags: [materials]
+      summary: Delete a material
+      description: Teacher workspace permission required. Owner only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "403":
+          description: Not the owner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  # â”€â”€ Generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /generation:
+    get:
+      tags: [generation]
+      summary: List generation requests for the authenticated teacher
+      responses:
+        "200":
+          description: Generation request list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+    post:
+      tags: [generation]
+      summary: Create a new generation request
+      description: Teacher workspace permission required. Triggers background generation pipeline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [constraints, materialIds]
+              properties:
+                constraints:
+                  type: object
+                  description: GenerationConstraints (topic, difficulty, format, questionCount, etc.)
+                materialIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        "201":
+          description: Generation request created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Invalid constraints
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /generation/{id}:
+    get:
+      tags: [generation]
+      summary: Get generation request detail (plan + result)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Generation detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "403":
+          description: Not the owner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /generation/{id}/regenerate:
+    post:
+      tags: [generation]
+      summary: Regenerate an assignment from the same request
+      description: Preserves requestId for traceability.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                constraints:
+                  type: object
+                  description: Optional updated constraints
+      responses:
+        "200":
+          description: Regeneration started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  # â”€â”€ Assignments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /assignments:
+    get:
+      tags: [assignments]
+      summary: List teacher's assignments
+      responses:
+        "200":
+          description: Assignment list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+    post:
+      tags: [assignments]
+      summary: Create assignment from a generation result
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [generationResultId]
+              properties:
+                generationResultId: { type: string }
+      responses:
+        "201":
+          description: Assignment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /assignments/{id}:
+    get:
+      tags: [assignments]
+      summary: Get assignment detail with current version content
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assignment detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+    patch:
+      tags: [assignments]
+      summary: Update assignment content (creates a new version)
+      description: Editing a PUBLISHABLE assignment reverts it to DRAFT.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                instructions: { type: string }
+                items:
+                  type: array
+                  description: Full replacement item list
+      responses:
+        "200":
+          description: Updated (new version created)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: ASSIGNED assignments cannot be edited
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+    delete:
+      tags: [assignments]
+      summary: Delete an assignment
+      description: Teacher workspace permission required. ASSIGNED assignments cannot be deleted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Assignment is ASSIGNED and cannot be deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /assignments/{id}/publish:
+    post:
+      tags: [assignments]
+      summary: Transition assignment to PUBLISHABLE status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Now PUBLISHABLE
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Already PUBLISHABLE or ASSIGNED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /assignments/{id}/versions:
+    get:
+      tags: [assignments]
+      summary: List version history for an assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Version list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /assignments/{id}/versions/{vId}/restore:
+    post:
+      tags: [assignments]
+      summary: Restore a previous version (creates a new version)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: vId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Restored (new version created)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  # â”€â”€ Distribution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /distribution:
+    get:
+      tags: [distribution]
+      summary: List teacher's distributions
+      responses:
+        "200":
+          description: Distribution list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+    post:
+      tags: [distribution]
+      summary: Create a distribution (assign to students)
+      description: |
+        Teacher workspace permission required. Assignment must be PUBLISHABLE.
+        AI mode restrictions apply for mandatory graded assignments.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignmentId, versionId, distributionStatus, isGraded, aiHelpMode, recipientUserIds]
+              properties:
+                assignmentId: { type: string }
+                versionId: { type: string }
+                deadline: { type: string, format: date-time, nullable: true }
+                distributionStatus: { type: string, enum: [MANDATORY, PRACTICE] }
+                isGraded: { type: boolean }
+                aiHelpMode: { $ref: "#/components/schemas/AiHelpMode" }
+                recipientUserIds:
+                  type: array
+                  items: { type: string }
+                  minItems: 1
+      responses:
+        "201":
+          description: Distribution created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Invalid AI mode for assignment type or empty recipients
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /distribution/{id}:
+    get:
+      tags: [distribution]
+      summary: Get distribution detail with recipient list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Distribution detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  # â”€â”€ Attempts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /attempts:
+    get:
+      tags: [attempts]
+      summary: List student's attempts
+      description: Student workspace permission required.
+      responses:
+        "200":
+          description: Attempt list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+    post:
+      tags: [attempts]
+      summary: Get or create attempt for a recipient record
+      description: Student workspace permission required. Idempotent â€” returns existing attempt if it exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipientId]
+              properties:
+                recipientId: { type: string }
+      responses:
+        "200":
+          description: Attempt (existing or newly created)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /attempts/{id}:
+    get:
+      tags: [attempts]
+      summary: Get attempt detail (expected answers stripped)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Attempt detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+    patch:
+      tags: [attempts]
+      summary: Save draft answers
+      description: Student workspace permission required. Rejected if attempt is already SUBMITTED.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      itemOrder: { type: integer }
+                      text: { type: string }
+      responses:
+        "200":
+          description: Draft saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Already submitted (immutable)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /attempts/{id}/submit:
+    post:
+      tags: [attempts]
+      summary: Submit attempt (irreversible)
+      description: Student workspace permission required. Attempt becomes immutable and queues automatic AI assessment analysis.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Already submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  # â”€â”€ AI Help â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /ai-help:
+    post:
+      tags: [ai-help]
+      summary: Send AI help request (policy-gated)
+      description: |
+        Student workspace permission required. Three-layer policy enforcement:
+        1. UI layer (client-side mode check)
+        2. Server layer (policy-engine.ts)
+        3. Gateway layer (ai-help-gateway.ts)
+
+        Blocked requests return 403 and are logged in the audit trail.
+        All requests (allowed and blocked) are logged as HelpRequest records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attemptId, message]
+              properties:
+                attemptId: { type: string }
+                message: { type: string }
+      responses:
+        "200":
+          description: AI response returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "403":
+          description: Help blocked by policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  # â”€â”€ Assessment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /assessment:
+    get:
+      tags: [assessment]
+      summary: List submitted attempts for a distribution
+      description: Teacher workspace permission required. Query param distributionId required.
+      parameters:
+        - name: distributionId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Submission list with assessment status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /assessment/{attemptId}:
+    get:
+      tags: [assessment]
+      summary: Get assessment detail for an attempt
+      description: Teacher workspace permission required. Returns assessment status, autoCheckStatus, latestAiRun, and aiRecommendation when available.
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment with auto-check results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+    post:
+      tags: [assessment]
+      summary: Get or create assessment for an attempt
+      description: Teacher workspace permission required. Ensures baseline deterministic auto-check exists.
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment baseline ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /assessment/{attemptId}/analyze:
+    post:
+      tags: [assessment]
+      summary: Manually enqueue AI analysis / re-analysis
+      description: Teacher workspace permission required. Queues AI semantic assessment and sets autoCheckStatus to QUEUED.
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment queued for AI analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /assessment/{attemptId}/review:
+    patch:
+      tags: [assessment]
+      summary: Save teacher review (grade + comment)
+      description: Teacher workspace permission required. Transitions to REVIEWED. Blocked if already PUBLISHED.
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [manualGrade, maxGrade]
+              properties:
+                manualGrade: { type: number, minimum: 0 }
+                maxGrade: { type: number, minimum: 0 }
+                comment: { type: string, nullable: true }
+                itemOverrides:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      itemOrder: { type: integer, minimum: 1 }
+                      teacherScore: { type: number, minimum: 0 }
+                      reason: { type: string }
+      responses:
+        "200":
+          description: Assessment updated to REVIEWED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Grade > maxGrade or assessment already PUBLISHED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /assessment/{attemptId}/publish:
+    post:
+      tags: [assessment]
+      summary: Publish assessment result (REVIEWED â†’ PUBLISHED)
+      description: Teacher workspace permission required. Allowed only from REVIEWED status. Result becomes visible to student and immutable after publication.
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Not REVIEWED or already PUBLISHED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /assessment/{attemptId}/result:
+    get:
+      tags: [assessment]
+      summary: Get published result (student view)
+      description: Student workspace permission required. Returns 404 if not yet published.
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Published result with grade, percentage, and feedback
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "404":
+          description: Result not yet published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  # â”€â”€ Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /analytics/teacher:
+    get:
+      tags: [analytics]
+      summary: Teacher analytics â€” per-distribution stats
+      description: Teacher workspace permission required. Returns engagement metrics for all the teacher's distributions.
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /analytics/student:
+    get:
+      tags: [analytics]
+      summary: Student analytics â€” assignment progress and grades
+      description: Student workspace permission required.
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  # â”€â”€ Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /admin/users:
+    get:
+      tags: [admin]
+      summary: List all users
+      description: Admin workspace permission required.
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
+  /admin/users/{id}:
+    patch:
+      tags: [admin]
+      summary: Update user active status
+      description: Admin workspace permission required. Cannot modify your own user.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+        "422":
+          description: Self-modification or last-admin guard
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /admin/audit:
+    get:
+      tags: [admin]
+      summary: Audit log with filters
+      description: |
+        ADMIN: full log with optional userId filter.
+        TEACHER: scoped to own events only.
+      parameters:
+        - name: action
+          in: query
+          schema: { type: string }
+          description: e.g. "auth.login", "attempt.submitted"
+        - name: userId
+          in: query
+          schema: { type: string }
+          description: Admin only â€” filter by user
+        - name: entityType
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 50, maximum: 100 }
+      responses:
+        "200":
+          description: Paginated audit log
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSuccess" }
+
