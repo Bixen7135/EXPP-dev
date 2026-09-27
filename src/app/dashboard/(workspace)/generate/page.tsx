@@ -842,16 +842,16 @@ export default function GeneratePage() {
   }
 
   return (
-    <main className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Generate Assignment</h1>
-      <p className="text-slate-400 text-sm mb-8">
+    <main className="mx-auto max-w-4xl p-8">
+      <h1 className="text-3xl font-semibold text-slate-100">Generate Assignment</h1>
+      <p className="mt-2 mb-8 text-sm text-slate-400">
         Configure constraints and select source materials. The system will
         plan and generate an assignment draft for your review.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <section className="p-5 border rounded-lg space-y-4">
-          <h2 className="font-semibold">Generation Presets</h2>
+        <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+          <h2 className="font-semibold text-slate-100">Generation Presets</h2>
 
           <p className="text-xs text-slate-400">
             {loadingLastUsedPreset
@@ -886,7 +886,7 @@ export default function GeneratePage() {
               type="button"
               onClick={handleApplySelectedPreset}
               disabled={!selectedPresetToApply}
-              className="px-3 py-1.5 border rounded text-sm hover:bg-slate-900/60 disabled:opacity-50"
+              className="rounded border border-slate-800 px-3 py-1.5 text-sm hover:bg-slate-900/60 disabled:opacity-50"
             >
               Apply
             </button>
@@ -894,7 +894,7 @@ export default function GeneratePage() {
               type="button"
               onClick={handleDeleteSavedPreset}
               disabled={!selectedSavedPreset}
-              className="px-3 py-1.5 border rounded text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+              className="rounded border border-slate-800 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50"
             >
               Delete
             </button>
@@ -924,8 +924,8 @@ export default function GeneratePage() {
           {presetError && <p className="text-red-500 text-sm">{presetError}</p>}
         </section>
 
-        <section className="p-5 border rounded-lg">
-          <h2 className="font-semibold mb-3">
+        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+          <h2 className="mb-3 font-semibold text-slate-100">
             Source Materials{" "}
             <span className="text-slate-500 font-normal text-sm">
               (optional - select materials to ground the generation)
@@ -1113,8 +1113,8 @@ export default function GeneratePage() {
           )}
         </section>
 
-        <section className="p-5 border rounded-lg space-y-4">
-          <h2 className="font-semibold">Constraints</h2>
+        <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+          <h2 className="font-semibold text-slate-100">Constraints</h2>
 
           <div>
             <label className="block text-sm font-medium mb-1">
@@ -1250,8 +1250,8 @@ export default function GeneratePage() {
           </div>
         </section>
 
-        <section className="p-5 border rounded-lg space-y-4">
-          <h2 className="font-semibold">Knowledge Sources</h2>
+        <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+          <h2 className="font-semibold text-slate-100">Knowledge Sources</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-slate-300">
