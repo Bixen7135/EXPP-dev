@@ -114,7 +114,10 @@ const BLUE_TRITANOPIA: ColorScale = {
 };
 
 const EMERALD_DEFAULT: ColorScale = {
+  "50": "#ecfdf5",
   "100": "#d0fae5",
+  "200": "#a7f3d0",
+  "300": "#6ee7b7",
   "400": "#00d294",
   "500": "#00bb7f",
   "600": "#009767",
@@ -122,7 +125,10 @@ const EMERALD_DEFAULT: ColorScale = {
 };
 
 const EMERALD_COLORBLIND: ColorScale = {
+  "50": "#ecfeff",
   "100": "#dcfce7",
+  "200": "#a5f3fc",
+  "300": "#67e8f9",
   "400": "#38bdf8",
   "500": "#0ea5e9",
   "600": "#0284c7",
@@ -130,7 +136,10 @@ const EMERALD_COLORBLIND: ColorScale = {
 };
 
 const EMERALD_TRITANOPIA: ColorScale = {
+  "50": "#faf5ff",
   "100": "#ede9fe",
+  "200": "#e9d5ff",
+  "300": "#d8b4fe",
   "400": "#c084fc",
   "500": "#a855f7",
   "600": "#9333ea",
@@ -247,7 +256,12 @@ function accentMapDefault(): ThemeTokenMap {
     toTokenMap("red", RED_DEFAULT),
     toTokenMap("amber", AMBER_DEFAULT),
     toTokenMap("yellow", YELLOW_DEFAULT),
-    toTokenMap("indigo", INDIGO_DEFAULT)
+    toTokenMap("indigo", INDIGO_DEFAULT),
+    toTokenMap("sky", BLUE_DEFAULT),
+    toTokenMap("cyan", BLUE_COLORBLIND),
+    toTokenMap("orange", RED_COLORBLIND),
+    toTokenMap("violet", BLUE_TRITANOPIA),
+    toTokenMap("rose", RED_DEFAULT)
   );
 }
 
@@ -259,7 +273,12 @@ function accentMapColorblind(): ThemeTokenMap {
     toTokenMap("red", RED_COLORBLIND),
     toTokenMap("amber", AMBER_DEFAULT),
     toTokenMap("yellow", YELLOW_DEFAULT),
-    toTokenMap("indigo", INDIGO_DEFAULT)
+    toTokenMap("indigo", INDIGO_DEFAULT),
+    toTokenMap("sky", BLUE_COLORBLIND),
+    toTokenMap("cyan", BLUE_COLORBLIND),
+    toTokenMap("orange", RED_COLORBLIND),
+    toTokenMap("violet", BLUE_TRITANOPIA),
+    toTokenMap("rose", RED_COLORBLIND)
   );
 }
 
@@ -271,7 +290,12 @@ function accentMapTritanopia(): ThemeTokenMap {
     toTokenMap("red", RED_TRITANOPIA),
     toTokenMap("amber", AMBER_DEFAULT),
     toTokenMap("yellow", YELLOW_TRITANOPIA),
-    toTokenMap("indigo", INDIGO_TRITANOPIA)
+    toTokenMap("indigo", INDIGO_TRITANOPIA),
+    toTokenMap("sky", BLUE_COLORBLIND),
+    toTokenMap("cyan", BLUE_COLORBLIND),
+    toTokenMap("orange", RED_TRITANOPIA),
+    toTokenMap("violet", BLUE_TRITANOPIA),
+    toTokenMap("rose", RED_TRITANOPIA)
   );
 }
 

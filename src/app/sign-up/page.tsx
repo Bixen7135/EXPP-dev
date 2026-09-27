@@ -182,8 +182,7 @@ export default function SignUpPage() {
                     autoComplete="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="mt-1 block w-full rounded-lg border bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ borderColor: "#3f5578" }}
+                    className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -198,8 +197,7 @@ export default function SignUpPage() {
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1 block w-full rounded-lg border bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ borderColor: "#3f5578" }}
+                    className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -215,8 +213,7 @@ export default function SignUpPage() {
                     minLength={8}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="mt-1 block w-full rounded-lg border bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ borderColor: "#3f5578" }}
+                  className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="mt-1 text-xs text-slate-400">
                     Password should be at least 8 characters including a number and a lowercase letter.
@@ -242,7 +239,6 @@ export default function SignUpPage() {
                 <button
                   type="button"
                   className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-base font-medium text-slate-100 transition-colors hover:bg-slate-700"
-                  style={{ borderColor: "#3f5578" }}
                 >
                   <GoogleIcon />
                   Continue with Google
@@ -251,7 +247,6 @@ export default function SignUpPage() {
                 <button
                   type="button"
                   className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-base font-medium text-slate-100 transition-colors hover:bg-slate-700"
-                  style={{ borderColor: "#3f5578" }}
                 >
                   <AppleIcon />
                   Continue with Apple

@@ -6,8 +6,8 @@ type Tone = "neutral" | "blue" | "green" | "red" | "violet";
 const toneClasses: Record<Tone, string> = {
   neutral: "border-slate-700/70 bg-slate-900/58 text-slate-200",
   blue: "border-[color:var(--color-blue-500)]/35 bg-[color:var(--color-blue-500)]/10 text-[color:var(--color-blue-200)]",
-  green: "border-emerald-500/35 bg-emerald-500/10 text-emerald-200",
-  red: "border-red-500/35 bg-red-500/10 text-red-200",
+  green: "border-emerald-500/35 bg-emerald-500/10 text-[color:var(--color-emerald-200)]",
+  red: "border-red-500/35 bg-red-500/10 text-[color:var(--color-red-200)]",
   violet: "border-violet-500/35 bg-violet-500/10 text-[color:var(--workspace-accent-text)]",
 };
 

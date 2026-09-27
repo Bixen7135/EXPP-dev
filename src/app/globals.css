@@ -2,19 +2,19 @@
 
 :root {
   color-scheme: light;
-  --app-canvas: #f8fafc;
-  --app-ink: #0f172a;
-  --workspace-main-surface: #f1f5f9;
-  --workspace-sidebar-surface: #ffffff;
-  --workspace-control-surface: #ffffff;
+  --app-canvas: var(--color-slate-950);
+  --app-ink: var(--color-slate-100);
+  --workspace-main-surface: var(--color-slate-900);
+  --workspace-sidebar-surface: var(--color-slate-950);
+  --workspace-control-surface: var(--color-slate-950);
 }
 
 html[data-theme-mode="dark"] {
   color-scheme: dark;
-  --app-canvas: #020617;
-  --app-ink: #f8fafc;
-  --workspace-main-surface: #0f172a;
-  --workspace-sidebar-surface: #020617;
+  --app-canvas: var(--color-slate-950);
+  --app-ink: var(--color-slate-50);
+  --workspace-main-surface: var(--color-slate-900);
+  --workspace-sidebar-surface: var(--color-slate-950);
   --workspace-control-surface: color-mix(in srgb, var(--color-slate-950) 68%, transparent);
 }
 
@@ -92,7 +92,7 @@ body {
 
 html[data-theme-mode="dark"] .dashboard-workspace-scope {
   --color-white: var(--color-slate-50);
-  --color-black: var(--color-slate-50);
+  --color-black: var(--color-slate-950);
   --color-gray-50: var(--color-slate-900);
   --color-gray-100: var(--color-slate-800);
   --color-gray-200: var(--color-slate-700);
@@ -139,8 +139,8 @@ html[data-theme-mode="dark"] .dashboard-workspace-scope .generate-breadcrumb-act
 }
 
 html[data-theme-mode="dark"] .role-workspace-scope {
-  --color-white: var(--color-slate-950);
-  --color-black: var(--color-slate-50);
+  --color-white: var(--color-slate-50);
+  --color-black: var(--color-slate-950);
   --color-gray-50: var(--color-slate-900);
   --color-gray-100: var(--color-slate-800);
   --color-gray-200: var(--color-slate-700);
@@ -248,8 +248,8 @@ html[data-theme-mode="dark"] .role-workspace-scope .generate-breadcrumb-active {
 
 .dashboard-workspace-scope,
 .role-workspace-scope {
-  --workspace-ink: #f8fafc;
-  --workspace-muted: #94a3b8;
+  --workspace-ink: var(--color-slate-50);
+  --workspace-muted: var(--color-slate-400);
   --workspace-rule: rgb(51 65 85 / 0.82);
   --workspace-accent: var(--color-blue-500);
   --workspace-accent-soft: color-mix(in srgb, var(--color-blue-500) 14%, transparent);
@@ -260,10 +260,10 @@ html[data-theme-mode="dark"] .role-workspace-scope .generate-breadcrumb-active {
 
 html:not([data-theme-mode="dark"]) .dashboard-workspace-scope,
 html:not([data-theme-mode="dark"]) .role-workspace-scope {
-  --workspace-ink: #0f172a;
-  --workspace-muted: #475569;
+  --workspace-ink: var(--color-slate-100);
+  --workspace-muted: var(--color-slate-600);
   --workspace-rule: rgb(203 213 225 / 0.82);
-  --workspace-accent-text: #1d4ed8;
+  --workspace-accent-text: var(--color-blue-700);
 }
 
 .dashboard-workspace-scope main,
