@@ -46,22 +46,16 @@ next-env.d.ts
 !/storage/materials/.gitkeep
 
 # AI request/response local logs
-/storage/ai-logs/*
-!/storage/ai-logs/.gitkeep
+/storage/ai-logs/
 
-# AI assistant artifacts (local chats, prompts, and scratch context)
+# AI assistant and IDE artifacts (local-only configuration, chats, prompts, and scratch context)
 .claude/
 .claude-code/
 .claude_code/
-.codex/*
-!.codex/
-!.codex/hooks.json
+.codex/
 .openai/
 .chatgpt/
-.cursor/*
-!.cursor/
-!.cursor/rules/
-!.cursor/rules/graphify.mdc
+.cursor/
 .cursorrules
 .cline/
 .roo/
@@ -69,6 +63,16 @@ next-env.d.ts
 .windsurf/
 .aider*
 .augment/
+.agents/
+.ai-harness/
+.playwright-mcp/
+.mcp.json
+agent/
+AGENTS.md
+AGENTS.md.*
+AI_CONTEXT_TOOLS.md
+skills.sh
+skills-lock.json
 
 # AI-generated scratch files in repository root
 /claude.md
@@ -91,3 +95,4 @@ next-env.d.ts
 /graphify-out/
 /.codegraph/
 /.venv/
+/storage/dev-logs/
