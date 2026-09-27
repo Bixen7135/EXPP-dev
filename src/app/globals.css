@@ -1,1 +1,367 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --app-canvas: #f8fafc;
+  --app-ink: #0f172a;
+  --app-page-gradient: radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--color-blue-500) 12%, transparent), transparent 32%), linear-gradient(180deg, #f8fafc, #eef2f7 48%, #e2e8f0);
+  --workspace-control-surface: #ffffff;
+}
+
+html[data-theme-mode="dark"] {
+  color-scheme: dark;
+  --app-canvas: #020617;
+  --app-ink: #f8fafc;
+  --app-page-gradient: radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--color-blue-500) 14%, transparent), transparent 32%), linear-gradient(180deg, #020617, #0f172a 48%, #111827);
+  --workspace-control-surface: color-mix(in srgb, var(--color-slate-950) 68%, transparent);
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--app-canvas);
+  color: var(--app-ink);
+}
+
+.workspace-shell {
+  background-image: var(--app-page-gradient);
+}
+
+.platform-shell {
+  --platform-canvas: #060e19;
+  --platform-surface: rgba(12, 24, 39, 0.72);
+  --platform-border: rgba(117, 164, 205, 0.28);
+  --platform-text: #eaf3ff;
+  --platform-muted: #9db5ce;
+  --platform-accent: #4be1ff;
+  --platform-accent-strong: #22b4e3;
+}
+
+.platform-gradient {
+  background-image:
+    radial-gradient(circle at 15% 15%, rgba(43, 182, 255, 0.28), transparent 40%),
+    radial-gradient(circle at 82% 72%, rgba(255, 171, 84, 0.23), transparent 35%),
+    linear-gradient(140deg, rgba(6, 14, 25, 1) 0%, rgba(8, 28, 44, 1) 45%, rgba(9, 22, 36, 1) 100%);
+  background-size: 130% 130%;
+  animation: platform-gradient-shift 18s ease-in-out infinite;
+}
+
+.platform-grid {
+  background-image:
+    linear-gradient(to right, rgba(161, 190, 219, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(161, 190, 219, 0.1) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.08));
+}
+
+.platform-orb {
+  animation: platform-float 12s ease-in-out infinite;
+  will-change: transform;
+}
+
+.platform-reveal {
+  opacity: 0;
+  transform: translateY(18px) scale(0.99);
+  animation: platform-reveal 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes platform-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes platform-float {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -16px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes platform-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .platform-gradient,
+  .platform-orb,
+  .platform-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope {
+  --color-white: var(--color-slate-50);
+  --color-black: var(--color-slate-50);
+  --color-gray-50: var(--color-slate-900);
+  --color-gray-100: var(--color-slate-800);
+  --color-gray-200: var(--color-slate-700);
+  --color-gray-300: var(--color-slate-600);
+  --color-gray-400: var(--color-slate-500);
+  --color-gray-500: var(--color-slate-400);
+  --color-gray-600: var(--color-slate-300);
+  --color-gray-700: var(--color-slate-200);
+  --color-gray-800: var(--color-slate-100);
+  --color-gray-900: var(--color-slate-100);
+  --color-gray-950: var(--color-slate-50);
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope :is(.text-blue-700, .text-blue-800, .text-blue-900) {
+  color: var(--color-blue-300) !important;
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope :is(
+  .text-green-700,
+  .text-green-800,
+  .text-green-900,
+  .text-emerald-700,
+  .text-emerald-800,
+  .text-emerald-900
+) {
+  color: var(--color-emerald-400) !important;
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope :is(.text-red-700, .text-red-800, .text-red-900) {
+  color: var(--color-red-300) !important;
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope :is(.text-indigo-700, .text-indigo-800, .text-indigo-900) {
+  color: var(--color-indigo-100) !important;
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope :is(.text-rose-700, .text-rose-800, .text-rose-900) {
+  color: var(--color-red-300) !important;
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope .generate-breadcrumb-active {
+  background-color: var(--color-blue-900) !important;
+  color: var(--color-blue-100) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope {
+  --color-white: var(--color-slate-950);
+  --color-black: var(--color-slate-50);
+  --color-gray-50: var(--color-slate-900);
+  --color-gray-100: var(--color-slate-800);
+  --color-gray-200: var(--color-slate-700);
+  --color-gray-300: var(--color-slate-600);
+  --color-gray-400: var(--color-slate-500);
+  --color-gray-500: var(--color-slate-400);
+  --color-gray-600: var(--color-slate-300);
+  --color-gray-700: var(--color-slate-200);
+  --color-gray-800: var(--color-slate-100);
+  --color-gray-900: var(--color-slate-100);
+  --color-gray-950: var(--color-slate-50);
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope main {
+  width: 100%;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(section, form, li, div).border {
+  background-color: rgb(15 23 42 / 0.4);
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.border, .border-b, .border-t, .border-l, .border-r) {
+  border-color: var(--color-slate-800);
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.rounded, .rounded-md, .rounded-lg) {
+  border-radius: 8px;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-white, .bg-gray-50, .bg-gray-100) {
+  background-color: rgb(15 23 42 / 0.55) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(table) {
+  color: var(--color-slate-300);
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(thead, tr.border-b) {
+  border-color: var(--color-slate-800);
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(tbody tr:hover) {
+  background-color: rgb(15 23 42 / 0.58);
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-blue-50:hover) {
+  background-color: rgb(30 41 59 / 0.72) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(input, select, textarea) {
+  border-color: var(--color-slate-700);
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-100);
+  color-scheme: dark;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(input, select, textarea):focus {
+  border-color: var(--color-blue-500);
+  outline: 2px solid rgb(59 130 246 / 0.38);
+  outline-offset: 1px;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(button, a) {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: 150ms;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(button, a):focus-visible {
+  outline: 2px solid var(--color-blue-400);
+  outline-offset: 2px;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(button:disabled, input:disabled, select:disabled, textarea:disabled) {
+  cursor: not-allowed;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900) {
+  color: var(--color-blue-300) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.text-green-700, .text-green-800, .text-green-900, .text-emerald-700, .text-emerald-800, .text-emerald-900) {
+  color: var(--color-emerald-400) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.text-red-700, .text-red-800, .text-red-900) {
+  color: var(--color-red-300) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-blue-50, .bg-blue-100) {
+  background-color: rgb(30 64 175 / 0.35) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-green-100, .bg-emerald-100) {
+  background-color: rgb(6 78 59 / 0.45) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-red-100, .bg-rose-100) {
+  background-color: rgb(127 29 29 / 0.45) !important;
+}
+
+html[data-theme-mode="dark"] .role-workspace-scope .generate-breadcrumb-active {
+  background-color: var(--color-blue-900) !important;
+  color: var(--color-blue-100) !important;
+}
+
+.dashboard-workspace-scope,
+.role-workspace-scope {
+  --workspace-ink: #f8fafc;
+  --workspace-muted: #94a3b8;
+  --workspace-rule: rgb(51 65 85 / 0.82);
+  --workspace-accent: var(--color-blue-500);
+  --workspace-accent-soft: color-mix(in srgb, var(--color-blue-500) 14%, transparent);
+  --workspace-accent-border: color-mix(in srgb, var(--color-blue-500) 40%, transparent);
+  --workspace-accent-strong: var(--color-blue-600);
+  --workspace-accent-text: var(--color-blue-200);
+}
+
+html:not([data-theme-mode="dark"]) .dashboard-workspace-scope,
+html:not([data-theme-mode="dark"]) .role-workspace-scope {
+  --workspace-ink: #0f172a;
+  --workspace-muted: #475569;
+  --workspace-rule: rgb(203 213 225 / 0.82);
+  --workspace-accent-text: #1d4ed8;
+}
+
+.dashboard-workspace-scope main,
+.role-workspace-scope main {
+  width: 100%;
+}
+
+.dashboard-workspace-scope h1,
+.role-workspace-scope h1 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.dashboard-workspace-scope :is(input, select, textarea),
+.role-workspace-scope :is(input, select, textarea) {
+  border-color: var(--color-slate-700);
+  background-color: var(--workspace-control-surface);
+  color: var(--color-slate-900);
+  color-scheme: light;
+}
+
+html[data-theme-mode="dark"] .dashboard-workspace-scope :is(input, select, textarea),
+html[data-theme-mode="dark"] .role-workspace-scope :is(input, select, textarea) {
+  background-color: color-mix(in srgb, var(--color-slate-950) 68%, transparent);
+  color: var(--color-slate-100);
+  color-scheme: dark;
+}
+
+.dashboard-workspace-scope :is(input, select, textarea):focus,
+.role-workspace-scope :is(input, select, textarea):focus {
+  border-color: var(--workspace-accent);
+  outline: 2px solid color-mix(in srgb, var(--workspace-accent) 38%, transparent);
+  outline-offset: 1px;
+}
+
+.dashboard-workspace-scope :is(button, a),
+.role-workspace-scope :is(button, a) {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: 180ms;
+}
+
+.dashboard-workspace-scope :is(button, a):focus-visible,
+.role-workspace-scope :is(button, a):focus-visible {
+  outline: 2px solid var(--color-blue-400);
+  outline-offset: 2px;
+}
+
+.workspace-primary-action {
+  background-color: var(--workspace-accent-strong);
+  color: white;
+}
+
+.workspace-primary-action:hover {
+  background-color: var(--workspace-accent);
+}
+
+.workspace-themed-link {
+  color: var(--workspace-accent-text);
+}
+
+.workspace-themed-link:hover {
+  color: var(--color-blue-100);
+}
+
+.workspace-accent-surface {
+  border-color: var(--workspace-accent-border);
+  background-color: var(--workspace-accent-soft);
+}
+
+.workspace-active-item {
+  border-color: var(--workspace-accent-border) !important;
+  background-color: var(--workspace-accent-soft) !important;
+  color: var(--workspace-accent-text) !important;
+}
+
+.workspace-range-accent::-webkit-slider-thumb {
+  background-color: var(--workspace-accent-strong) !important;
+}
+
+.workspace-range-accent::-moz-range-thumb {
+  background-color: var(--workspace-accent-strong) !important;
+}
