@@ -1,13 +1,21 @@
 import { resolveSession } from "@/lib/auth/session";
 import { canAccessAdminWorkspace } from "@/lib/auth/authorization";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
+import {
+  ActionCard,
+  ActionGrid,
+  MetricCard,
+  MetricGrid,
+  PageHero,
+  SectionPanel,
+  WorkspacePage,
+} from "@/components/dashboard/workspace-ui";
 
 export default async function AdminDashboardPage() {
   const user = await resolveSession();
   if (!user || !canAccessAdminWorkspace(user)) {
-    redirect("/login");
+    redirect("/sign-in");
   }
 
   const [userCount, auditCount] = await Promise.all([
@@ -16,40 +24,25 @@ export default async function AdminDashboardPage() {
   ]);
 
   return (
-    <main className="p-8 max-w-4xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <p className="mt-1 text-gray-600">Welcome, {user.name}</p>
-      </div>
+    <WorkspacePage maxWidth="max-w-5xl">
+      <PageHero
+        title="Admin dashboard"
+      />
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="border rounded-lg p-4 text-center">
-          <p className="text-3xl font-bold text-gray-900">{userCount}</p>
-          <p className="text-xs text-gray-500 mt-1">Total Users</p>
-        </div>
-        <div className="border rounded-lg p-4 text-center">
-          <p className="text-3xl font-bold text-gray-900">{auditCount}</p>
-          <p className="text-xs text-gray-500 mt-1">Audit Events</p>
-        </div>
-      </div>
+      <MetricGrid>
+        <MetricCard label="Total users" value={userCount} />
+        <MetricCard label="Audit events" value={auditCount} />
+      </MetricGrid>
 
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Admin Actions</h2>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/admin/users"
-            className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
-          >
-            Manage Users
-          </Link>
-          <Link
-            href="/admin/audit"
-            className="px-4 py-2 border rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            View Audit Log
-          </Link>
-        </div>
-      </div>
-    </main>
+      <SectionPanel
+        title="Admin actions"
+        description="Keep high-impact controls visible without changing admin-only access."
+      >
+        <ActionGrid>
+          <ActionCard href="/admin/users" label="Manage users" description="Review accounts, roles, and access." />
+          <ActionCard href="/admin/audit" label="View audit log" description="Trace platform events and account activity." />
+        </ActionGrid>
+      </SectionPanel>
+    </WorkspacePage>
   );
 }

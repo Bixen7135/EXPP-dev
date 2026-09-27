@@ -19,48 +19,37 @@ export function WorkspacePage({
   maxWidth?: string;
 }) {
   return (
-    <main className={`mx-auto w-full ${maxWidth} space-y-8 px-4 py-6 sm:px-6 lg:px-8`}>
+    <main className={`mx-auto w-full ${maxWidth} space-y-6 px-4 py-5 sm:px-6 lg:px-8`}>
       {children}
     </main>
   );
 }
 
 export function PageHero({
-  eyebrow,
   title,
   description,
   actions,
   meta,
 }: {
-  eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
   meta?: ReactNode;
 }) {
   return (
-    <header className="rounded-lg border border-[color:var(--workspace-rule)] bg-[color:var(--workspace-control-surface)] p-5 sm:p-7">
-      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl space-y-3">
-          {eyebrow ? (
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--workspace-accent-text)]">
-              {eyebrow}
-            </p>
-          ) : null}
-          <div className="space-y-2">
-            <h1 className="text-balance text-3xl font-semibold leading-tight text-[color:var(--workspace-ink)] sm:text-4xl">
+    <header className="flex flex-col gap-3 border-b border-[color:var(--workspace-rule)] pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+          <h1 className="!font-sans text-2xl font-semibold leading-tight text-[color:var(--workspace-ink)] sm:text-3xl">
               {title}
-            </h1>
+          </h1>
             {description ? (
-              <p className="max-w-2xl text-pretty text-sm leading-6 text-[color:var(--workspace-muted)]">
+              <p className="mt-1 max-w-2xl text-sm leading-5 text-[color:var(--workspace-muted)]">
                 {description}
               </p>
             ) : null}
-          </div>
-          {meta ? <div className="flex flex-wrap gap-2">{meta}</div> : null}
-        </div>
-        {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
+          {meta ? <div className="mt-2 flex flex-wrap gap-2">{meta}</div> : null}
       </div>
+        {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
     </header>
   );
 }
@@ -80,7 +69,7 @@ export function SectionPanel({
 }) {
   return (
     <section
-      className={`rounded-xl border border-slate-800/85 bg-slate-900/46 p-4 shadow-lg shadow-slate-950/20 sm:p-5 ${className}`}
+      className={`border-b border-[color:var(--workspace-rule)] pb-5 ${className}`}
     >
       {title || description || actions ? (
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -136,7 +125,7 @@ export function ActionCard({
   return (
     <Link
       href={href}
-      className="group flex min-h-28 flex-col justify-between rounded-lg border border-slate-800/90 bg-slate-950/35 p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--color-blue-400)]/45 hover:bg-slate-900/78 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-blue-400)]"
+      className="group flex min-h-24 flex-col justify-between border border-[color:var(--workspace-rule)] p-3 transition-colors duration-150 hover:border-[color:var(--color-blue-400)]/55 hover:bg-[color:var(--workspace-accent-soft)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-blue-400)]"
     >
       <span className="text-sm font-semibold text-slate-100">{label}</span>
       <span className="mt-3 text-sm leading-5 text-slate-400">{description}</span>
@@ -153,7 +142,7 @@ export function StatusBadge({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold ${toneClasses[tone]}`}
+      className={`inline-flex items-center rounded border px-2 py-1 text-xs font-semibold ${toneClasses[tone]}`}
     >
       {children}
     </span>
@@ -170,7 +159,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-700/85 bg-slate-950/35 p-8 text-center">
+    <div className="border-y border-dashed border-[color:var(--workspace-rule)] py-7 text-center">
       <p className="text-base font-semibold text-slate-100">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">{description}</p>
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}

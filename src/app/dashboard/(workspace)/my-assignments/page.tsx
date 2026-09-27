@@ -33,7 +33,7 @@ export default async function StudentAssignmentsPage() {
       />
 
       {assignments.length === 0 ? (
-        <EmptyState title="No assignments yet" description="Assignments distributed to you will appear here with due dates, support settings, and the next available action." />
+        <EmptyState title="No assignments yet" description="Assignments distributed to this global account will appear here with due dates, support settings, and the next available action." />
       ) : (
         <SectionPanel title="Assigned work" description={`${assignments.length} assignment${assignments.length === 1 ? "" : "s"} available.`}>
         <ul className="space-y-3">
@@ -47,12 +47,9 @@ export default async function StudentAssignmentsPage() {
                 : "Submitted";
 
             return (
-              <li
-                key={a.recipientId}
-                className="flex flex-col gap-4 rounded-lg border border-slate-800 bg-slate-900/40 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
+              <li key={a.recipientId} className="flex flex-col gap-4 rounded-lg border border-slate-800/85 bg-slate-950/32 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 space-y-1">
-                  <p className="truncate font-medium text-slate-100">{a.assignmentTitle}</p>
+                  <p className="font-medium truncate">{a.assignmentTitle}</p>
                   <div className="flex flex-wrap gap-3 text-xs text-slate-400">
                     <span>By {a.creatorName}</span>
                     <span>{a.distributionStatus === "MANDATORY" ? "Mandatory" : "Practice"}</span>
@@ -63,21 +60,17 @@ export default async function StudentAssignmentsPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-3">
-                  <span
-                    className="hidden"
-                  >
-                  </span>
+                <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge tone={(ATTEMPT_STATUS_COLORS[displayStatus] ?? "neutral") as "neutral" | "green"}>{statusLabel}</StatusBadge>
                   <Link
-                    href={`/student/assignments/${a.recipientId}`}
+                    href={`/dashboard/my-assignments/${a.recipientId}`}
                     className={primaryButtonClass()}
                   >
                     {displayStatus === "SUBMITTED" ? "View" : displayStatus === "DRAFT" ? "Continue" : "Start"}
                   </Link>
                   {displayStatus === "SUBMITTED" && (
                     <Link
-                      href={`/student/assignments/${a.recipientId}/result`}
+                      href={`/dashboard/my-assignments/${a.recipientId}/result`}
                       className={secondaryButtonClass()}
                     >
                       Result
@@ -93,3 +86,4 @@ export default async function StudentAssignmentsPage() {
     </WorkspacePage>
   );
 }
+

@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resolveSession } from "@/lib/auth/session";
 import { listAssignments } from "@/modules/assignments/service";
@@ -30,46 +30,43 @@ export default async function AssignmentsPage() {
     <WorkspacePage maxWidth="max-w-6xl">
       <PageHero
         title="Assignments"
-        actions={<Link href="/teacher/generate" className={primaryButtonClass()}>New from generation</Link>}
+        actions={<Link href="/dashboard/generate" className={primaryButtonClass()}>New from generation</Link>}
       />
 
       {assignments.length === 0 ? (
         <EmptyState
           title="No assignments yet"
           description="Generate content first, then return here to edit, version, and distribute it."
-          action={<Link href="/teacher/generate" className={primaryButtonClass()}>Generate content</Link>}
+          action={<Link href="/dashboard/generate" className={primaryButtonClass()}>Generate content</Link>}
         />
       ) : (
         <SectionPanel title="Assignment library" description={`${assignments.length} assignment${assignments.length === 1 ? "" : "s"} available.`}>
         <ul className="space-y-3">
           {assignments.map((a) => (
-            <li
-              key={a.id}
-              className="flex flex-col gap-4 rounded-lg border border-slate-800/85 bg-slate-950/32 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
+            <li key={a.id} className="flex flex-col gap-4 rounded-lg border border-slate-800/85 bg-slate-950/32 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-slate-100">{a.title}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Created {new Date(a.createdAt).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-3">
                 <StatusBadge tone={STATUS_COLORS[a.status] as "neutral" | "green" | "blue"}>{a.status}</StatusBadge>
                 <Link
-                  href={`/teacher/assignments/${a.id}/edit`}
+                  href={`/dashboard/assignments/${a.id}/edit`}
                   className={secondaryButtonClass()}
                 >
                   Edit
                 </Link>
                 <Link
-                  href={`/teacher/assignments/${a.id}/versions`}
+                  href={`/dashboard/assignments/${a.id}/versions`}
                   className={secondaryButtonClass()}
                 >
                   History
                 </Link>
                 {(a.status === "PUBLISHABLE" || a.status === "ASSIGNED") && (
                   <Link
-                    href={`/teacher/assignments/${a.id}/assign`}
+                    href={`/dashboard/assignments/${a.id}/assign`}
                     className={primaryButtonClass()}
                   >
                     Assign
@@ -89,3 +86,4 @@ export default async function AssignmentsPage() {
     </WorkspacePage>
   );
 }
+

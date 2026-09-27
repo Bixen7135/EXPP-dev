@@ -45,11 +45,11 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
       <SectionPanel title="Filters">
       <form className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block text-xs text-slate-500">Subject</span>
+          <span className="block text-xs text-slate-500 mb-1">Subject</span>
           <select
             name="subject"
             defaultValue={analytics.activeSubject ?? ""}
-            className="min-w-48 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            className="border rounded px-3 py-2 text-sm min-w-48 bg-slate-950"
           >
             <option value="">All subjects</option>
             {analytics.subjectOptions.map((subject) => (
@@ -66,7 +66,7 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
           Apply
         </button>
         <Link
-          href="/teacher/analytics"
+          href="/dashboard/analytics"
           className={secondaryButtonClass()}
         >
           Clear
@@ -93,12 +93,12 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
         ) : (
           <ul className="space-y-2">
             {analytics.students.map((student) => (
-              <li key={student.learnerAccountId} className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+              <li key={student.learnerAccountId} className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium text-slate-100">{student.learnerName}</p>
+                  <p className="font-medium text-slate-200">{student.learnerName}</p>
                   <StatusBadge>{student.recommendationStatus}</StatusBadge>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-6">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
                   <Stat label="Avg %" value={student.overview.avgPercent ?? "n/a"} />
                   <Stat label="Published" value={student.overview.publishedCount} />
                   <Stat label="Completion %" value={student.overview.completionRate} />
@@ -119,11 +119,11 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
         <EmptyState
           title="No distributions yet"
           description="Create an assignment and distribute it to start tracking progress."
-          action={<Link href="/teacher/assignments" className={primaryButtonClass()}>Create an assignment</Link>}
+          action={<Link href="/dashboard/assignments" className={primaryButtonClass()}>Create an assignment</Link>}
         />
       ) : (
         <SectionPanel title="Per-distribution breakdown">
-          <div className="space-y-4">
+        <div className="space-y-4">
           {analytics.distributions.map((distribution) => {
             const submissionRate =
               distribution.totalRecipients > 0
@@ -131,11 +131,11 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
                 : 0;
 
             return (
-              <div key={distribution.distributionId} className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
+              <div key={distribution.distributionId} className="border rounded-lg p-5 space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-slate-100">{distribution.assignmentTitle}</p>
-                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-400">
+                    <p className="font-semibold">{distribution.assignmentTitle}</p>
+                    <div className="flex flex-wrap gap-3 text-xs text-slate-400 mt-1">
                       <span>{distribution.subjectLabel}</span>
                       <span>
                         {distribution.distributionStatus === "MANDATORY"
@@ -145,25 +145,27 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
                       {distribution.isGraded && (
                         <span className="text-emerald-300 font-medium">Graded</span>
                       )}
-                      <span>AI: {AI_HELP_MODE_LABELS[distribution.aiHelpMode] ?? distribution.aiHelpMode}</span>
+                      <span>
+                        AI: {AI_HELP_MODE_LABELS[distribution.aiHelpMode] ?? distribution.aiHelpMode}
+                      </span>
                       {distribution.deadline && (
                         <span>Due {new Date(distribution.deadline).toLocaleDateString()}</span>
                       )}
                     </div>
                   </div>
-                  <span className="shrink-0 text-xs text-slate-500">
+                  <span className="text-xs text-slate-500 shrink-0">
                     {new Date(distribution.createdAt).toLocaleDateString()}
                   </span>
                 </div>
 
                 <div>
-                  <div className="mb-1 flex justify-between text-xs text-slate-400">
+                  <div className="flex justify-between text-xs text-slate-400 mb-1">
                     <span>Submission progress</span>
                     <span>
                       {distribution.submitted} / {distribution.totalRecipients} ({submissionRate}%)
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-800/70">
+                  <div className="h-2 bg-slate-800/70 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-green-500 rounded-full"
                       style={{ width: `${submissionRate}%` }}
@@ -181,7 +183,7 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
                     { label: "AI Blocked", value: distribution.aiHelpBlocked, color: "text-red-600" },
                   ].map((item) => (
                     <div key={item.label}>
-                      <p className={`text-lg font-bold ${item.color}`}>{item.value}</p>
+                      <p className={`font-bold text-lg ${item.color}`}>{item.value}</p>
                       <p className="text-slate-500">{item.label}</p>
                     </div>
                   ))}
@@ -189,14 +191,14 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
 
                 <div className="flex gap-2 pt-1">
                   <Link
-                    href={`/teacher/distribution/${distribution.distributionId}`}
+                    href={`/dashboard/distribution/${distribution.distributionId}`}
                     className="text-xs font-semibold workspace-themed-link"
                   >
                     View distribution
                   </Link>
                   {distribution.submitted > 0 && (
                     <Link
-                      href={`/teacher/distribution/${distribution.distributionId}/review`}
+                      href={`/dashboard/distribution/${distribution.distributionId}/review`}
                       className="text-xs font-semibold workspace-themed-link"
                     >
                       Review submissions
@@ -206,7 +208,7 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
               </div>
             );
           })}
-          </div>
+        </div>
         </SectionPanel>
       )}
     </WorkspacePage>
@@ -215,9 +217,9 @@ export default async function TeacherAnalyticsPage({ searchParams }: Props) {
 
 function Stat(props: { label: string; value: string | number }) {
   return (
-    <div className="rounded border border-slate-800 bg-slate-950/35 p-2 text-center">
-      <p className="text-sm font-semibold text-slate-100">{props.value}</p>
-      <p className="mt-1 text-[11px] text-slate-500">{props.label}</p>
+    <div className="border rounded p-2 text-center">
+      <p className="font-semibold text-sm text-slate-100">{props.value}</p>
+      <p className="text-[11px] text-slate-500 mt-1">{props.label}</p>
     </div>
   );
 }
