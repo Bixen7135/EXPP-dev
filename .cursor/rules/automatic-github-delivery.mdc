@@ -1,0 +1,15 @@
+---
+description: Automatically commit and push completed project changes to GitHub
+alwaysApply: true
+---
+
+## Automatic GitHub delivery
+
+For every completed change in this project, after the relevant verification:
+
+- inspect the final diff and stage only files changed by the current task;
+- preserve unrelated pre-existing work and never stage `.env`, credentials, tokens, or secrets;
+- create a concise Conventional Commit message describing the change;
+- push the commit with `git push origin HEAD` using the configured GitHub identity and credentials.
+
+Never force-push or rewrite published history. If verification, remote configuration, identity, credentials, commit, or push fails, stop and report the exact blocker instead of claiming completion.
