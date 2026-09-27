@@ -135,3 +135,5 @@ After every completed engineering change in this project:
 
 Do not use force-push, rewrite published history, or commit unrelated work. If the remote, identity, credentials, verification gate, or push is unavailable, stop before claiming completion and report the exact blocker.
 
+The completion rule is enforced by the repository Stop hook in `.codex/hooks.json`, which runs `bun scripts/auto-deliver.ts`. Do not bypass or disable this hook. It must successfully commit and push eligible task changes before completion is reported.
+

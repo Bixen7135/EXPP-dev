@@ -13,3 +13,5 @@ For every completed change in this project, after the relevant verification:
 - push the commit with `git push origin HEAD` using the configured GitHub identity and credentials.
 
 Never force-push or rewrite published history. If verification, remote configuration, identity, credentials, commit, or push fails, stop and report the exact blocker instead of claiming completion.
+
+The repository Stop hook at `.codex/hooks.json` invokes `bun scripts/auto-deliver.ts` after each completed response. The hook is the enforcement boundary: it stages eligible non-secret changes, commits them, and pushes `origin HEAD`; a delivery failure must keep completion blocked.

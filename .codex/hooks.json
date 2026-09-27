@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PreToolUse": [],
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun scripts/auto-deliver.ts --snapshot"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun scripts/auto-deliver.ts"
+          }
+        ]
+      }
+    ]
+  }
+}
