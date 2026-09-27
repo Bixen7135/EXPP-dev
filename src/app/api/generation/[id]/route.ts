@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { ok, fail, AppError } from "@/lib/errors";
 import { getGenerationRequest } from "@/modules/generation/service";
 
@@ -20,7 +21,7 @@ export async function GET(
         { status: 401 }
       );
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), {
         status: 403,
       });

@@ -10,11 +10,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev:all:clean": "bun scripts/cleanup-dev-processes.mjs",
-    "dev:all": "bun run dev:all:clean && docker compose up -d --wait db redis && bun run db:generate && bun run db:push && bun run dev",
+    "dev:all": "bun scripts/dev-all.mjs",
+    "dev:app": "bun run db:generate && bun run db:push && bun run dev",
     "worker:assessment-ai": "bun scripts/assessment-ai-worker.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push"
+    "db:prepare:account-domain": "bun scripts/prepare-account-domain-global.mjs",
+    "db:push": "bun run db:prepare:account-domain && prisma db push"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.41",

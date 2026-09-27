@@ -38,7 +38,7 @@ const makeRecipient = (opts: {
     aiHelpMode: "NO_HELP",
     deadline: null,
     assignment: { title: "Test Assignment" },
-    teacher: { name: "Teacher T" },
+    creatorAccount: { displayName: "Teacher T" },
   },
   attempt: opts.attemptStatus
     ? {

@@ -58,7 +58,7 @@ const fakeDistContext = {
 
 const fakeRecipient = {
   id: "rec_01",
-  studentId: "student_01",
+  recipientAccountId: "student_01",
   distributionId: "dist_01",
   status: "PENDING",
   distribution: fakeDistContext,
@@ -68,7 +68,7 @@ const fakeRecipient = {
 const fakeAttempt = {
   id: "att_01",
   recipientId: "rec_01",
-  studentId: "student_01",
+  learnerAccountId: "student_01",
   answers: [],
   status: "DRAFT",
   submittedAt: null,

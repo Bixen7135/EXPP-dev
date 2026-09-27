@@ -7,9 +7,9 @@ export interface UserSummary {
   id: string;
   email: string;
   name: string;
-  role: "STUDENT" | "TEACHER" | "ADMIN";
   isActive: boolean;
   createdAt: Date;
+  accountCount: number;
 }
 
 export interface AuditLogEntry {
@@ -35,40 +35,60 @@ export interface AuditLogPage {
 
 export async function listUsers(): Promise<UserSummary[]> {
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isActive: true,
+      createdAt: true,
+      _count: { select: { accounts: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
-  return users as UserSummary[];
+  return users.map((user) => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    isActive: user.isActive,
+    createdAt: user.createdAt,
+    accountCount: user._count.accounts,
+  }));
 }
 
 export async function updateUserStatus(
   targetUserId: string,
   requestingUserId: string,
-  updates: { isActive?: boolean; role?: "STUDENT" | "TEACHER" | "ADMIN" }
+  updates: { isActive?: boolean }
 ): Promise<UserSummary> {
   // Prevent self-modification
   if (targetUserId === requestingUserId) {
-    throw new ValidationError("Cannot modify your own account");
+    throw new ValidationError("Cannot modify your own user");
   }
 
   const user = await prisma.user.findUnique({ where: { id: targetUserId } });
   if (!user) throw new NotFoundError("User not found");
 
-  // Cannot demote the last admin
-  if (updates.role && updates.role !== "ADMIN" && user.role === "ADMIN") {
-    const adminCount = await prisma.user.count({ where: { role: "ADMIN", isActive: true } });
-    if (adminCount <= 1) {
-      throw new ValidationError("Cannot change the role of the last active admin");
-    }
-  }
-
   const updated = await prisma.user.update({
     where: { id: targetUserId },
     data: updates,
-    select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isActive: true,
+      createdAt: true,
+      _count: { select: { accounts: true } },
+    },
   });
 
-  return updated as UserSummary;
+  return {
+    id: updated.id,
+    email: updated.email,
+    name: updated.name,
+    isActive: updated.isActive,
+    createdAt: updated.createdAt,
+    accountCount: updated._count.accounts,
+  };
 }
 
 // ── Audit Log ──────────────────────────────────────────────────────────────

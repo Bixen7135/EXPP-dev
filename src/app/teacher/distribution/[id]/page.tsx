@@ -89,7 +89,7 @@ export default async function DistributionDetailPage({ params }: Props) {
           <ul className="space-y-2">
             {distribution.recipients.map((r) => (
               <li key={r.id} className="border rounded p-3 flex items-center justify-between">
-                <span className="text-sm font-mono text-gray-700">{r.studentId}</span>
+                <span className="text-sm font-mono text-gray-700">{r.recipientDisplayName}</span>
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
                     RECIPIENT_STATUS_COLORS[r.status] ?? "bg-gray-100"

@@ -74,7 +74,7 @@ export interface ItemScoreOverride {
 export interface AssessmentDetail {
   id: string;
   attemptId: string;
-  teacherId: string;
+  reviewerAccountId: string;
   status: AssessmentStatus;
   autoCheckStatus: AutoCheckStatus;
   autoCheckResult: AutoCheckResult | null;

@@ -6,12 +6,13 @@ import { checkHelpPolicy } from "@/modules/ai-help/policy-engine";
 import { requestAiHelp } from "@/modules/ai-help/ai-help-gateway";
 import { auditLog } from "@/lib/audit/logger";
 import type { AiHelpMode } from "@/modules/ai-help/mode-definitions";
+import { canAccessStudentWorkspace } from "@/lib/auth/authorization";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "STUDENT")
+  if (!canAccessStudentWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   try {
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
 
     if (!attempt) return NextResponse.json(fail("Attempt not found", "NOT_FOUND", traceId), { status: 404 });
-    if (attempt.studentId !== session.id)
+    if (attempt.learnerAccountId !== session.id)
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
     const dist = attempt.recipient.distribution;
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const helpRequest = await prisma.helpRequest.create({
         data: {
           attemptId,
-          studentId: session.id,
+          learnerAccountId: session.id,
           mode,
           requestContent: question,
           status: "BLOCKED",
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         },
       });
       await auditLog({
-        userId: session.id,
+        actorAccountId: session.id,
         action: "ai_help.blocked",
         entityType: "HelpRequest",
         entityId: helpRequest.id,
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Layer 3: Gateway (independently re-checks policy before calling LLM)
     const result = await requestAiHelp({
       attemptId,
-      studentId: session.id,
+      learnerAccountId: session.id,
       mode,
       question: question.trim(),
       assignmentContext,
@@ -113,3 +114,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     throw err;
   }
 }
+

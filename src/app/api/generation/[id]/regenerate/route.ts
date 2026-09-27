@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { auditLog } from "@/lib/audit/logger";
 import { ok, fail, AppError } from "@/lib/errors";
 import { regenerateRequest } from "@/modules/generation/service";
@@ -21,7 +22,7 @@ export async function POST(
         { status: 401 }
       );
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), {
         status: 403,
       });

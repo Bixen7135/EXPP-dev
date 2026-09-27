@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockTx = {
   assignment: { update: vi.fn() },
@@ -12,7 +12,10 @@ vi.mock("@/lib/db/prisma", () => ({
     $transaction: vi.fn((cb: (tx: typeof mockTx) => unknown) => cb(mockTx)),
     assignment: { findUnique: vi.fn() },
     assignmentVersion: { findUnique: vi.fn() },
-    user: { findMany: vi.fn() },
+    account: { findMany: vi.fn() },
+    formalEntityMember: { findMany: vi.fn() },
+    targetGroupMember: { findMany: vi.fn() },
+    practiceGroupMember: { findMany: vi.fn() },
     assignmentDistribution: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -38,7 +41,10 @@ const mockPrisma = prisma as unknown as {
   $transaction: ReturnType<typeof vi.fn>;
   assignment: { findUnique: ReturnType<typeof vi.fn> };
   assignmentVersion: { findUnique: ReturnType<typeof vi.fn> };
-  user: { findMany: ReturnType<typeof vi.fn> };
+  account: { findMany: ReturnType<typeof vi.fn> };
+  formalEntityMember: { findMany: ReturnType<typeof vi.fn> };
+  targetGroupMember: { findMany: ReturnType<typeof vi.fn> };
+  practiceGroupMember: { findMany: ReturnType<typeof vi.fn> };
   assignmentDistribution: {
     findMany: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
@@ -48,7 +54,7 @@ const mockPrisma = prisma as unknown as {
 
 const fakeAssignment = {
   id: "asgn_01",
-  teacherId: "teacher_01",
+  ownerAccountId: "teacher_01",
   status: "PUBLISHABLE",
   title: "Test Assignment",
   currentVersionId: "ver_01",
@@ -66,7 +72,7 @@ const fakeDistribution = {
   id: "dist_01",
   assignmentId: "asgn_01",
   versionId: "ver_01",
-  teacherId: "teacher_01",
+  creatorUserId: "teacher_01",
   deadline: null,
   status: "MANDATORY",
   isGraded: true,
@@ -74,8 +80,20 @@ const fakeDistribution = {
   createdAt: new Date(),
   updatedAt: new Date(),
   recipients: [
-    { id: "rec_01", studentId: "student_01", status: "PENDING", createdAt: new Date() },
-    { id: "rec_02", studentId: "student_02", status: "PENDING", createdAt: new Date() },
+    {
+      id: "rec_01",
+      recipientAccountId: "student_01",
+      status: "PENDING",
+      createdAt: new Date(),
+      recipientAccount: { displayName: "Student 01" },
+    },
+    {
+      id: "rec_02",
+      recipientAccountId: "student_02",
+      status: "PENDING",
+      createdAt: new Date(),
+      recipientAccount: { displayName: "Student 02" },
+    },
   ],
   assignment: { title: "Test Assignment" },
 };
@@ -84,7 +102,10 @@ describe("createDistribution", () => {
   beforeEach(() => {
     mockPrisma.assignment.findUnique.mockResolvedValue(fakeAssignment);
     mockPrisma.assignmentVersion.findUnique.mockResolvedValue(fakeVersion);
-    mockPrisma.user.findMany.mockResolvedValue(fakeStudents);
+    mockPrisma.account.findMany.mockResolvedValue(fakeStudents);
+    mockPrisma.formalEntityMember.findMany.mockResolvedValue([]);
+    mockPrisma.targetGroupMember.findMany.mockResolvedValue([]);
+    mockPrisma.practiceGroupMember.findMany.mockResolvedValue([]);
     mockTx.assignment.update.mockResolvedValue({ ...fakeAssignment, status: "ASSIGNED" });
     mockTx.assignmentDistribution.create.mockResolvedValue(fakeDistribution);
   });
@@ -93,11 +114,11 @@ describe("createDistribution", () => {
     const result = await createDistribution({
       assignmentId: "asgn_01",
       versionId: "ver_01",
-      teacherId: "teacher_01",
+      creatorUserId: "teacher_01",
       distributionStatus: "MANDATORY",
       isGraded: true,
       aiHelpMode: "NO_HELP",
-      recipientStudentIds: ["student_01", "student_02"],
+      recipientUserIds: ["student_01", "student_02"],
     });
 
     expect(mockTx.assignment.update).toHaveBeenCalledWith(
@@ -113,16 +134,16 @@ describe("createDistribution", () => {
       ...fakeAssignment,
       status: "ASSIGNED",
     });
-    mockPrisma.user.findMany.mockResolvedValue([{ id: "student_01" }]);
+    mockPrisma.account.findMany.mockResolvedValue([{ id: "student_01" }]);
 
     await createDistribution({
       assignmentId: "asgn_01",
       versionId: "ver_01",
-      teacherId: "teacher_01",
+      creatorUserId: "teacher_01",
       distributionStatus: "PRACTICE",
       isGraded: false,
       aiHelpMode: "GUIDED",
-      recipientStudentIds: ["student_01"],
+      recipientUserIds: ["student_01"],
     });
 
     expect(mockTx.assignment.update).not.toHaveBeenCalled();
@@ -137,11 +158,11 @@ describe("createDistribution", () => {
       createDistribution({
         assignmentId: "asgn_01",
         versionId: "ver_01",
-        teacherId: "teacher_01",
+        creatorUserId: "teacher_01",
         distributionStatus: "MANDATORY",
         isGraded: true,
         aiHelpMode: "NO_HELP",
-        recipientStudentIds: ["student_01"],
+        recipientUserIds: ["student_01"],
       })
     ).rejects.toThrow(ValidationError);
   });
@@ -151,11 +172,11 @@ describe("createDistribution", () => {
       createDistribution({
         assignmentId: "asgn_01",
         versionId: "ver_01",
-        teacherId: "other_teacher",
+        creatorUserId: "other_teacher",
         distributionStatus: "MANDATORY",
         isGraded: true,
         aiHelpMode: "NO_HELP",
-        recipientStudentIds: ["student_01"],
+        recipientUserIds: ["student_01"],
       })
     ).rejects.toThrow(ForbiddenError);
   });
@@ -166,11 +187,11 @@ describe("createDistribution", () => {
       createDistribution({
         assignmentId: "missing",
         versionId: "ver_01",
-        teacherId: "teacher_01",
+        creatorUserId: "teacher_01",
         distributionStatus: "MANDATORY",
         isGraded: true,
         aiHelpMode: "NO_HELP",
-        recipientStudentIds: ["student_01"],
+        recipientUserIds: ["student_01"],
       })
     ).rejects.toThrow(NotFoundError);
   });
@@ -180,25 +201,25 @@ describe("createDistribution", () => {
       createDistribution({
         assignmentId: "asgn_01",
         versionId: "ver_01",
-        teacherId: "teacher_01",
+        creatorUserId: "teacher_01",
         distributionStatus: "MANDATORY",
         isGraded: true,
         aiHelpMode: "GUIDED",
-        recipientStudentIds: ["student_01"],
+        recipientUserIds: ["student_01"],
       })
     ).rejects.toThrow(ValidationError);
   });
 
   it("allows GUIDED mode for practice assignment", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([{ id: "student_01" }]);
+    mockPrisma.account.findMany.mockResolvedValue([{ id: "student_01" }]);
     await createDistribution({
       assignmentId: "asgn_01",
       versionId: "ver_01",
-      teacherId: "teacher_01",
+      creatorUserId: "teacher_01",
       distributionStatus: "PRACTICE",
       isGraded: true,
       aiHelpMode: "GUIDED",
-      recipientStudentIds: ["student_01"],
+      recipientUserIds: ["student_01"],
     });
     expect(mockTx.assignmentDistribution.create).toHaveBeenCalledOnce();
   });
@@ -208,11 +229,11 @@ describe("createDistribution", () => {
       createDistribution({
         assignmentId: "asgn_01",
         versionId: "ver_01",
-        teacherId: "teacher_01",
+        creatorUserId: "teacher_01",
         distributionStatus: "MANDATORY",
         isGraded: true,
         aiHelpMode: "NO_HELP",
-        recipientStudentIds: [],
+        recipientUserIds: [],
       })
     ).rejects.toThrow(ValidationError);
   });
@@ -224,24 +245,40 @@ describe("listDistributions", () => {
     const result = await listDistributions("teacher_01");
     expect(result).toHaveLength(1);
     expect(mockPrisma.assignmentDistribution.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { teacherId: "teacher_01" } })
+      expect.objectContaining({ where: { creatorAccountId: "teacher_01" } })
     );
   });
 });
 
 describe("listAssignableStudents", () => {
   it("returns active students for assignment selection", async () => {
-    const rows = [{ id: "student_01", name: "Student One", email: "student1@ex.com" }];
-    mockPrisma.user.findMany.mockResolvedValue(rows);
+    const rows = [
+      {
+        id: "student_01",
+        displayName: "Student One",
+        domain: "GLOBAL",
+        organizationId: null,
+        user: { email: "student1@ex.com" },
+      },
+    ];
+    mockPrisma.account.findMany.mockResolvedValue(rows);
 
     const result = await listAssignableStudents();
 
-    expect(result).toEqual(rows);
-    expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
-      where: { role: "STUDENT", isActive: true },
-      select: { id: true, name: true, email: true },
-      orderBy: [{ name: "asc" }, { email: "asc" }],
-    });
+    expect(result).toEqual([
+      {
+        id: "student_01",
+        name: "Student One",
+        email: "student1@ex.com",
+        domain: "GLOBAL",
+        organizationId: null,
+      },
+    ]);
+    expect(mockPrisma.account.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: true }),
+      })
+    );
   });
 });
 
@@ -251,7 +288,7 @@ describe("listStudentAssignments", () => {
       {
         id: "rec_01",
         distributionId: "dist_01",
-        studentId: "student_01",
+        recipientAccountId: "student_01",
         status: "PENDING",
         createdAt: new Date(),
         distribution: {
@@ -260,7 +297,7 @@ describe("listStudentAssignments", () => {
           isGraded: true,
           status: "MANDATORY",
           assignment: { title: "Test Assignment" },
-          teacher: { name: "Teacher One" },
+          creatorAccount: { displayName: "Teacher One" },
         },
         attempt: null,
       },
@@ -271,7 +308,8 @@ describe("listStudentAssignments", () => {
     expect(result[0].assignmentTitle).toBe("Test Assignment");
     expect(result[0].attemptStatus).toBeNull();
     expect(mockPrisma.assignmentRecipient.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { studentId: "student_01" } })
+      expect.objectContaining({ where: { recipientAccountId: "student_01" } })
     );
   });
 });
+

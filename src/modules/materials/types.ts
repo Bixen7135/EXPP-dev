@@ -88,7 +88,7 @@ export interface TagInput {
 
 export interface MaterialFolderSummary {
   id: string;
-  teacherId: string;
+  ownerAccountId: string;
   name: string;
   parentId: string | null;
   createdAt: Date;

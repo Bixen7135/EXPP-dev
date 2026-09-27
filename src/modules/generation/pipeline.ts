@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
+﻿import { prisma } from "@/lib/db/prisma";
 import { buildMaterialContext } from "./context-retrieval";
 import { generatePlan } from "./planner";
 import { generateContent } from "./generator";
@@ -29,7 +29,7 @@ export async function runGenerationPipeline(requestId: string): Promise<void> {
 
     const materialContext = await buildMaterialContext(
       request.materialIds,
-      request.teacherId
+      request.ownerAccountId
     );
     const outline = await generatePlan(constraints, materialContext);
 
@@ -79,3 +79,4 @@ export async function runGenerationPipeline(requestId: string): Promise<void> {
     throw err;
   }
 }
+

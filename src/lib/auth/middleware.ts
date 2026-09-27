@@ -1,18 +1,29 @@
 import { NextRequest } from "next/server";
 
 const SESSION_COOKIE = "expp_session";
-type Role = "STUDENT" | "TEACHER" | "ADMIN";
 
 interface RouteRule {
   prefix: string;
-  allowedRoles: Role[];
+  requiredPermissions: string[];
   redirectTo: string;
 }
 
 const ROUTE_RULES: RouteRule[] = [
-  { prefix: "/teacher", allowedRoles: ["TEACHER", "ADMIN"], redirectTo: "/login" },
-  { prefix: "/student", allowedRoles: ["STUDENT"], redirectTo: "/login" },
-  { prefix: "/admin", allowedRoles: ["ADMIN"], redirectTo: "/login" },
+  {
+    prefix: "/teacher",
+    requiredPermissions: ["workspace.teacher", "workspace.admin"],
+    redirectTo: "/login",
+  },
+  {
+    prefix: "/student",
+    requiredPermissions: ["workspace.student"],
+    redirectTo: "/login",
+  },
+  {
+    prefix: "/admin",
+    requiredPermissions: ["workspace.admin"],
+    redirectTo: "/login",
+  },
 ];
 
 export async function resolveSessionFromRequest(
@@ -27,6 +38,9 @@ export function matchRouteRule(pathname: string): RouteRule | null {
   return ROUTE_RULES.find((r) => pathname.startsWith(r.prefix)) ?? null;
 }
 
-export function isAllowed(role: Role, rule: RouteRule): boolean {
-  return rule.allowedRoles.includes(role);
+export function isAllowed(permissions: string[], rule: RouteRule): boolean {
+  if (permissions.includes("*")) return true;
+  return rule.requiredPermissions.some((permission) =>
+    permissions.includes(permission)
+  );
 }

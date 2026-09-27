@@ -4,7 +4,7 @@ export interface StudentAssignmentAnalytic {
   recipientId: string;
   distributionId: string;
   assignmentTitle: string;
-  teacherName: string;
+  creatorName: string;
   distributionStatus: string;
   isGraded: boolean;
   aiHelpMode: string;
@@ -18,7 +18,7 @@ export interface StudentAssignmentAnalytic {
 }
 
 export interface StudentAnalytics {
-  studentId: string;
+  recipientAccountId: string;
   assignments: StudentAssignmentAnalytic[];
   totals: {
     total: number;
@@ -29,14 +29,16 @@ export interface StudentAnalytics {
   };
 }
 
-export async function getStudentAnalytics(studentId: string): Promise<StudentAnalytics> {
+export async function getStudentAnalytics(
+  recipientAccountId: string
+): Promise<StudentAnalytics> {
   const recipients = await prisma.assignmentRecipient.findMany({
-    where: { studentId },
+    where: { recipientAccountId },
     include: {
       distribution: {
         include: {
           assignment: { select: { title: true } },
-          teacher: { select: { name: true } },
+          creatorAccount: { select: { displayName: true } },
         },
       },
       attempt: {
@@ -66,7 +68,7 @@ export async function getStudentAnalytics(studentId: string): Promise<StudentAna
       recipientId: r.id,
       distributionId: r.distributionId,
       assignmentTitle: r.distribution.assignment.title,
-      teacherName: r.distribution.teacher.name,
+      creatorName: r.distribution.creatorAccount.displayName,
       distributionStatus: r.distribution.status,
       isGraded: r.distribution.isGraded,
       aiHelpMode: r.distribution.aiHelpMode,
@@ -91,5 +93,5 @@ export async function getStudentAnalytics(studentId: string): Promise<StudentAna
     { total: 0, notStarted: 0, inProgress: 0, submitted: 0, resultsPublished: 0 }
   );
 
-  return { studentId, assignments, totals };
+  return { recipientAccountId, assignments, totals };
 }

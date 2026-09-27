@@ -6,68 +6,55 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  STUDENT
-  TEACHER
-  ADMIN
+enum AccountDomain {
+  GLOBAL
+  ORGANIZATION
 }
 
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  role         Role
-  name         String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  sessions           Session[]
-  auditEvents        AuditEvent[]
-  materials          Material[]
-  materialFolders    MaterialFolder[]
-  generationRequests GenerationRequest[]
-  assignments        Assignment[]
-  distributions      AssignmentDistribution[] @relation("TeacherDistributions")
-  recipientRecords   AssignmentRecipient[]    @relation("StudentRecipients")
-  attempts           Attempt[]                @relation("StudentAttempts")
-  helpRequests       HelpRequest[]            @relation("StudentHelpRequests")
-  assessments        Assessment[]             @relation("TeacherAssessments")
-
-  @@map("users")
+enum EnvironmentType {
+  PERSONAL
+  ORGANIZATION
 }
 
-model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([token])
-  @@index([userId])
-  @@map("sessions")
+enum RoleScope {
+  ORGANIZATION
+  INSTITUTION
 }
 
-model AuditEvent {
-  id         String   @id @default(cuid())
-  userId     String?
-  action     String
-  entityType String?
-  entityId   String?
-  context    Json?
-  traceId    String
-  createdAt  DateTime @default(now())
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  INVITED
+}
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+enum InstitutionType {
+  SCHOOL
+  COLLEGE
+  UNIVERSITY
+  TRAINING_CENTER
+  OTHER
+}
 
-  @@index([userId])
-  @@index([traceId])
-  @@index([action])
-  @@index([createdAt])
-  @@map("audit_events")
+enum OnboardingMethod {
+  INVITE
+  MANUAL
+  BULK
+}
+
+enum FormalEntityKind {
+  CLASS
+  SUBJECT_GROUP
+  SUBGROUP
+  STREAM
+  COHORT
+  COURSE
+  MODULE
+  OTHER
+}
+
+enum RoleAssignmentSource {
+  SYSTEM
+  CUSTOM
 }
 
 enum MaterialStatus {
@@ -76,9 +63,413 @@ enum MaterialStatus {
   ERROR
 }
 
+enum GenerationStatus {
+  PENDING
+  PLANNING
+  GENERATING
+  READY
+  ERROR
+}
+
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHABLE
+  ASSIGNED
+}
+
+enum AiHelpMode {
+  NO_HELP
+  CLARIFICATION
+  GUIDED
+  POST_ASSESSMENT
+}
+
+enum DistributionStatus {
+  MANDATORY
+  PRACTICE
+}
+
+enum RecipientStatus {
+  PENDING
+  ACTIVE
+  SUBMITTED
+}
+
+enum RecipientSourceType {
+  FORMAL_ENTITY
+  TARGET_GROUP
+  PRACTICE_GROUP
+  USER @map("ACCOUNT")
+}
+
+enum AttemptStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum HelpRequestStatus {
+  ALLOWED
+  BLOCKED
+}
+
+enum AssessmentStatus {
+  PENDING
+  AUTO_CHECKED
+  REVIEWED
+  PUBLISHED
+}
+
+enum AutoCheckStatus {
+  NOT_STARTED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum AssessmentAiRunTrigger {
+  AUTO_ON_SUBMIT
+  MANUAL_RERUN
+}
+
+enum AssessmentAiRunStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accounts    Account[]
+  auditEvents AuditEvent[] @relation("ActorUserAudit")
+
+  @@map("users")
+}
+
+model Account {
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  domain         AccountDomain
+  environment    EnvironmentType @default(PERSONAL)
+  displayName    String
+  avatarUrl      String?
+  slug           String?
+  organizationId String?
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  activeSessions            Session[]               @relation("ActiveUserSessions")
+  memberships               AccountMembership[]
+  roleAssignments           RoleAssignment[]
+  materials                 Material[]              @relation("MaterialOwner")
+  materialFolders           MaterialFolder[]        @relation("MaterialFolderOwner")
+  generationRequests        GenerationRequest[]     @relation("GenerationRequestOwner")
+  assignments               Assignment[]            @relation("AssignmentOwner")
+  assignmentVersionsAuthored AssignmentVersion[]    @relation("AssignmentVersionAuthor")
+  distributionsCreated      AssignmentDistribution[] @relation("CreatorDistributions")
+  recipientRecords          AssignmentRecipient[]   @relation("RecipientAccounts")
+  attempts                  Attempt[]               @relation("LearnerAttempts")
+  helpRequests              HelpRequest[]           @relation("LearnerHelpRequests")
+  assessmentsReviewed       Assessment[]            @relation("ReviewerAssessments")
+
+  formalMemberships   FormalEntityMember[]
+  targetMemberships   TargetGroupMember[]
+  practiceMemberships PracticeGroupMember[]
+
+  auditEvents AuditEvent[] @relation("ActorAccountAudit")
+
+  @@index([organizationId])
+  @@index([domain, organizationId])
+  @@unique([organizationId, slug])
+  @@map("accounts")
+}
+
+model Session {
+  id                    String   @id @default(cuid())
+  activeUserContextId   String?  @map("activeAccountId")
+  signedInUserContextIds String[] @default([]) @map("signedInAccountIds")
+  token                 String   @unique
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
+
+  activeUserContext Account? @relation("ActiveUserSessions", fields: [activeUserContextId], references: [id], onDelete: SetNull)
+
+  @@index([token])
+  @@index([activeUserContextId])
+  @@map("sessions")
+}
+
+model Organization {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  description      String?
+  onboardingPolicy Json?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  accounts           Account[]
+  institutions       Institution[]
+  memberships        AccountMembership[]
+  roles              RoleDefinition[]
+  roleAssignments    RoleAssignment[]
+  materials          Material[]
+  generationRequests GenerationRequest[]
+  assignments        Assignment[]
+  distributions      AssignmentDistribution[]
+  auditEvents        AuditEvent[]
+
+  @@map("organizations")
+}
+
+model Institution {
+  id                       String          @id @default(cuid())
+  organizationId           String
+  slug                     String
+  name                     String
+  type                     InstitutionType
+  onboardingPolicyOverride Json?
+  isActive                 Boolean         @default(true)
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships        AccountMembership[]
+  roles              RoleDefinition[]
+  roleAssignments    RoleAssignment[]
+  formalEntities     FormalEntity[]
+  targetGroups       TargetGroup[]
+  practiceGroups     PracticeGroup[]
+  materials          Material[]
+  generationRequests GenerationRequest[]
+  assignments        Assignment[]
+  distributions      AssignmentDistribution[]
+  auditEvents        AuditEvent[]
+
+  @@index([organizationId])
+  @@unique([organizationId, slug])
+  @@map("institutions")
+}
+
+model AccountMembership {
+  id             String           @id @default(cuid())
+  accountId      String
+  organizationId String
+  institutionId  String?
+  status         MembershipStatus @default(ACTIVE)
+  joinedAt       DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  institution  Institution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+
+  @@index([accountId])
+  @@index([organizationId])
+  @@index([institutionId])
+  @@unique([accountId, organizationId, institutionId])
+  @@map("account_memberships")
+}
+
+model RoleDefinition {
+  id              String               @id @default(cuid())
+  scope           RoleScope
+  source          RoleAssignmentSource @default(SYSTEM)
+  organizationId  String?
+  institutionId   String?
+  institutionType InstitutionType?
+  key             String
+  name            String
+  description     String?
+  permissions     Json
+  isSystem        Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  institution  Institution?  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  assignments  RoleAssignment[]
+
+  @@index([scope])
+  @@index([organizationId])
+  @@index([institutionId])
+  @@unique([scope, organizationId, institutionId, key])
+  @@map("role_definitions")
+}
+
+model RoleAssignment {
+  id             String   @id @default(cuid())
+  accountId      String
+  roleId         String
+  organizationId String?
+  institutionId  String?
+  createdAt      DateTime @default(now())
+
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  role         RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  institution  Institution?  @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+
+  @@index([accountId])
+  @@index([roleId])
+  @@index([organizationId])
+  @@index([institutionId])
+  @@unique([accountId, roleId, organizationId, institutionId])
+  @@map("role_assignments")
+}
+
+model FormalEntity {
+  id            String          @id @default(cuid())
+  institutionId String
+  kind          FormalEntityKind
+  customKind    String?
+  name          String
+  code          String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  institution  Institution           @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  members      FormalEntityMember[]
+  materials    Material[]
+  distributions AssignmentDistribution[] @relation("FormalEntityDistributions")
+
+  @@index([institutionId])
+  @@index([kind])
+  @@map("formal_entities")
+}
+
+model FormalEntityMember {
+  id             String   @id @default(cuid())
+  formalEntityId String
+  accountId      String
+  memberRole     String?
+  createdAt      DateTime @default(now())
+
+  formalEntity FormalEntity @relation(fields: [formalEntityId], references: [id], onDelete: Cascade)
+  account     Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([formalEntityId])
+  @@index([accountId])
+  @@unique([formalEntityId, accountId])
+  @@map("formal_entity_members")
+}
+
+model TargetGroup {
+  id            String   @id @default(cuid())
+  institutionId String
+  name          String
+  purpose       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  institution  Institution          @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  members      TargetGroupMember[]
+  materials    Material[]
+  distributions AssignmentDistribution[] @relation("TargetGroupDistributions")
+
+  @@index([institutionId])
+  @@map("target_groups")
+}
+
+model TargetGroupMember {
+  id            String   @id @default(cuid())
+  targetGroupId String
+  accountId     String
+  memberRole    String?
+  createdAt     DateTime @default(now())
+
+  targetGroup TargetGroup @relation(fields: [targetGroupId], references: [id], onDelete: Cascade)
+  account     Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([targetGroupId])
+  @@index([accountId])
+  @@unique([targetGroupId, accountId])
+  @@map("target_group_members")
+}
+
+model PracticeGroup {
+  id            String   @id @default(cuid())
+  institutionId String
+  name          String
+  purpose       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  institution  Institution            @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  members      PracticeGroupMember[]
+  materials    Material[]
+  distributions AssignmentDistribution[] @relation("PracticeGroupDistributions")
+
+  @@index([institutionId])
+  @@map("practice_groups")
+}
+
+model PracticeGroupMember {
+  id              String   @id @default(cuid())
+  practiceGroupId String
+  accountId       String
+  memberRole      String?
+  createdAt       DateTime @default(now())
+
+  practiceGroup PracticeGroup @relation(fields: [practiceGroupId], references: [id], onDelete: Cascade)
+  account       Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([practiceGroupId])
+  @@index([accountId])
+  @@unique([practiceGroupId, accountId])
+  @@map("practice_group_members")
+}
+
+model AuditEvent {
+  id             String   @id @default(cuid())
+  userId         String?
+  actorAccountId String?
+  organizationId String?
+  institutionId  String?
+  action         String
+  entityType     String?
+  entityId       String?
+  context        Json?
+  traceId        String
+  createdAt      DateTime @default(now())
+
+  user         User?         @relation("ActorUserAudit", fields: [userId], references: [id], onDelete: SetNull)
+  actorAccount Account?      @relation("ActorAccountAudit", fields: [actorAccountId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  institution  Institution?  @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([actorAccountId])
+  @@index([organizationId])
+  @@index([institutionId])
+  @@index([traceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
 model Material {
   id               String         @id @default(cuid())
-  teacherId        String
+  ownerAccountId   String
+  organizationId   String?
+  institutionId    String?
+  formalEntityId   String?
+  targetGroupId    String?
+  practiceGroupId  String?
   folderId         String?
   title            String
   originalFilename String
@@ -90,31 +481,41 @@ model Material {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  teacher User            @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  folder  MaterialFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  tags    MaterialTag[]
+  ownerAccount Account        @relation("MaterialOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  institution Institution?    @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  formalEntity FormalEntity?  @relation(fields: [formalEntityId], references: [id], onDelete: SetNull)
+  targetGroup  TargetGroup?   @relation(fields: [targetGroupId], references: [id], onDelete: SetNull)
+  practiceGroup PracticeGroup? @relation(fields: [practiceGroupId], references: [id], onDelete: SetNull)
+  folder       MaterialFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  tags         MaterialTag[]
 
-  @@index([teacherId])
+  @@index([ownerAccountId])
+  @@index([organizationId])
+  @@index([institutionId])
+  @@index([formalEntityId])
+  @@index([targetGroupId])
+  @@index([practiceGroupId])
   @@index([folderId])
   @@map("materials")
 }
 
 model MaterialFolder {
-  id        String    @id @default(cuid())
-  teacherId String
-  name      String
-  parentId  String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id             String   @id @default(cuid())
+  ownerAccountId String
+  name           String
+  parentId       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  teacher  User             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  parent   MaterialFolder?  @relation("MaterialFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children MaterialFolder[] @relation("MaterialFolderTree")
-  materials Material[]
+  ownerAccount Account          @relation("MaterialFolderOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  parent       MaterialFolder?  @relation("MaterialFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children     MaterialFolder[] @relation("MaterialFolderTree")
+  materials    Material[]
 
-  @@index([teacherId])
+  @@index([ownerAccountId])
   @@index([parentId])
-  @@index([teacherId, parentId])
+  @@index([ownerAccountId, parentId])
   @@map("material_folders")
 }
 
@@ -130,28 +531,26 @@ model MaterialTag {
   @@map("material_tags")
 }
 
-enum GenerationStatus {
-  PENDING
-  PLANNING
-  GENERATING
-  READY
-  ERROR
-}
-
 model GenerationRequest {
-  id          String           @id @default(cuid())
-  teacherId   String
-  status      GenerationStatus @default(PENDING)
-  constraints Json
-  materialIds String[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  ownerAccountId String
+  organizationId String?
+  institutionId  String?
+  status         GenerationStatus @default(PENDING)
+  constraints    Json
+  materialIds    String[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  user   User              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  plan   GenerationPlan?
-  result GenerationResult?
+  ownerAccount Account          @relation("GenerationRequestOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  institution Institution?      @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  plan         GenerationPlan?
+  result       GenerationResult?
 
-  @@index([teacherId])
+  @@index([ownerAccountId])
+  @@index([organizationId])
+  @@index([institutionId])
   @@map("generation_requests")
 }
 
@@ -181,17 +580,11 @@ model GenerationResult {
   @@map("generation_results")
 }
 
-// ── Phase 4: Editing & Versioning ─────────────────────────────────────────
-
-enum AssignmentStatus {
-  DRAFT
-  PUBLISHABLE
-  ASSIGNED
-}
-
 model Assignment {
   id                 String           @id @default(cuid())
-  teacherId          String
+  ownerAccountId     String
+  organizationId     String?
+  institutionId      String?
   generationResultId String?
   title              String
   content            Json
@@ -200,13 +593,17 @@ model Assignment {
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
-  teacher          User               @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  generationResult GenerationResult?  @relation(fields: [generationResultId], references: [id], onDelete: SetNull)
-  versions         AssignmentVersion[]
-  items            AssignmentItem[]
-  distributions    AssignmentDistribution[]
+  ownerAccount    Account            @relation("AssignmentOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  organization    Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  institution     Institution?       @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  generationResult GenerationResult? @relation(fields: [generationResultId], references: [id], onDelete: SetNull)
+  versions        AssignmentVersion[]
+  items           AssignmentItem[]
+  distributions   AssignmentDistribution[]
 
-  @@index([teacherId])
+  @@index([ownerAccountId])
+  @@index([organizationId])
+  @@index([institutionId])
   @@map("assignments")
 }
 
@@ -215,14 +612,16 @@ model AssignmentVersion {
   assignmentId      String
   versionNumber     Int
   content           Json
-  authorId          String
+  authorAccountId   String
   changeDescription String?
   createdAt         DateTime @default(now())
 
-  assignment    Assignment               @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment    Assignment                @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  authorAccount Account                   @relation("AssignmentVersionAuthor", fields: [authorAccountId], references: [id], onDelete: Cascade)
   distributions AssignmentDistribution[]
 
   @@index([assignmentId])
+  @@index([authorAccountId])
   @@map("assignment_versions")
 }
 
@@ -240,170 +639,143 @@ model AssignmentItem {
   @@map("assignment_items")
 }
 
-// ── Phase 5: Distribution, Completion & AI Help ────────────────────────────
-
-enum AiHelpMode {
-  NO_HELP
-  CLARIFICATION
-  GUIDED
-  POST_ASSESSMENT
-}
-
-enum DistributionStatus {
-  MANDATORY
-  PRACTICE
-}
-
-enum RecipientStatus {
-  PENDING
-  ACTIVE
-  SUBMITTED
-}
-
-enum AttemptStatus {
-  DRAFT
-  SUBMITTED
-}
-
-enum HelpRequestStatus {
-  ALLOWED
-  BLOCKED
-}
-
 model AssignmentDistribution {
-  id           String             @id @default(cuid())
-  assignmentId String
-  versionId    String
-  teacherId    String
-  deadline     DateTime?
-  status       DistributionStatus @default(MANDATORY)
-  isGraded     Boolean            @default(true)
-  aiHelpMode   AiHelpMode         @default(NO_HELP)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id              String             @id @default(cuid())
+  assignmentId    String
+  versionId       String
+  creatorAccountId String
+  organizationId  String?
+  institutionId   String?
+  formalEntityId  String?
+  targetGroupId   String?
+  practiceGroupId String?
+  deadline        DateTime?
+  status          DistributionStatus @default(MANDATORY)
+  isGraded        Boolean            @default(true)
+  aiHelpMode      AiHelpMode         @default(NO_HELP)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
-  assignment Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  version    AssignmentVersion @relation(fields: [versionId], references: [id])
-  teacher    User              @relation("TeacherDistributions", fields: [teacherId], references: [id], onDelete: Cascade)
-  recipients AssignmentRecipient[]
+  assignment    Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  version       AssignmentVersion @relation(fields: [versionId], references: [id])
+  creatorAccount Account          @relation("CreatorDistributions", fields: [creatorAccountId], references: [id], onDelete: Cascade)
+  organization  Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  institution   Institution?      @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  formalEntity  FormalEntity?     @relation("FormalEntityDistributions", fields: [formalEntityId], references: [id], onDelete: SetNull)
+  targetGroup   TargetGroup?      @relation("TargetGroupDistributions", fields: [targetGroupId], references: [id], onDelete: SetNull)
+  practiceGroup PracticeGroup?    @relation("PracticeGroupDistributions", fields: [practiceGroupId], references: [id], onDelete: SetNull)
+  recipientSources RecipientSource[]
+  recipients    AssignmentRecipient[]
 
   @@index([assignmentId])
-  @@index([teacherId])
+  @@index([creatorAccountId])
+  @@index([organizationId])
+  @@index([institutionId])
+  @@index([formalEntityId])
+  @@index([targetGroupId])
+  @@index([practiceGroupId])
   @@map("assignment_distributions")
 }
 
-model AssignmentRecipient {
-  id             String          @id @default(cuid())
+model RecipientSource {
+  id            String             @id @default(cuid())
   distributionId String
-  studentId      String
-  status         RecipientStatus @default(PENDING)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  sourceType    RecipientSourceType
+  sourceRefId   String?
+  metadata      Json?
+  createdAt     DateTime           @default(now())
 
   distribution AssignmentDistribution @relation(fields: [distributionId], references: [id], onDelete: Cascade)
-  student      User                   @relation("StudentRecipients", fields: [studentId], references: [id], onDelete: Cascade)
-  attempt      Attempt?
 
-  @@unique([distributionId, studentId])
   @@index([distributionId])
-  @@index([studentId])
+  @@index([sourceType])
+  @@map("recipient_sources")
+}
+
+model AssignmentRecipient {
+  id               String          @id @default(cuid())
+  distributionId   String
+  recipientAccountId String
+  status           RecipientStatus @default(PENDING)
+  snapshotContext  Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  distribution   AssignmentDistribution @relation(fields: [distributionId], references: [id], onDelete: Cascade)
+  recipientAccount Account              @relation("RecipientAccounts", fields: [recipientAccountId], references: [id], onDelete: Cascade)
+  attempt        Attempt?
+
+  @@unique([distributionId, recipientAccountId])
+  @@index([distributionId])
+  @@index([recipientAccountId])
   @@map("assignment_recipients")
 }
 
 model Attempt {
-  id          String        @id @default(cuid())
-  recipientId String        @unique
-  studentId   String
-  answers     Json          @default("[]")
-  status      AttemptStatus @default(DRAFT)
-  submittedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  recipientId      String        @unique
+  learnerAccountId String
+  answers          Json          @default("[]")
+  status           AttemptStatus @default(DRAFT)
+  submittedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   recipient    AssignmentRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  student      User                @relation("StudentAttempts", fields: [studentId], references: [id], onDelete: Cascade)
+  learnerAccount Account           @relation("LearnerAttempts", fields: [learnerAccountId], references: [id], onDelete: Cascade)
   helpRequests HelpRequest[]
   assessment   Assessment?
 
-  @@index([studentId])
+  @@index([learnerAccountId])
   @@map("attempts")
 }
 
 model HelpRequest {
-  id              String            @id @default(cuid())
-  attemptId       String
-  studentId       String
-  mode            AiHelpMode
-  requestContent  String
-  responseContent String?
-  status          HelpRequestStatus @default(ALLOWED)
-  blockReason     String?
-  traceId         String
-  createdAt       DateTime          @default(now())
+  id               String            @id @default(cuid())
+  attemptId        String
+  learnerAccountId String
+  mode             AiHelpMode
+  requestContent   String
+  responseContent  String?
+  status           HelpRequestStatus @default(ALLOWED)
+  blockReason      String?
+  traceId          String
+  createdAt        DateTime          @default(now())
 
-  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  student User    @relation("StudentHelpRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  attempt        Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  learnerAccount Account @relation("LearnerHelpRequests", fields: [learnerAccountId], references: [id], onDelete: Cascade)
 
   @@index([attemptId])
-  @@index([studentId])
+  @@index([learnerAccountId])
   @@map("help_requests")
 }
 
-// ── Phase 6: Assessment & Result Publication ───────────────────────────────
-
-enum AssessmentStatus {
-  PENDING
-  AUTO_CHECKED
-  REVIEWED
-  PUBLISHED
-}
-
-enum AutoCheckStatus {
-  NOT_STARTED
-  QUEUED
-  PROCESSING
-  READY
-  FAILED
-}
-
-enum AssessmentAiRunTrigger {
-  AUTO_ON_SUBMIT
-  MANUAL_RERUN
-}
-
-enum AssessmentAiRunStatus {
-  QUEUED
-  PROCESSING
-  READY
-  FAILED
-}
-
 model Assessment {
-  id              String           @id @default(cuid())
-  attemptId       String           @unique
-  teacherId       String
-  autoCheckResult Json?
-  autoCheckStatus AutoCheckStatus  @default(NOT_STARTED)
+  id               String           @id @default(cuid())
+  attemptId        String           @unique
+  reviewerAccountId String
+  autoCheckResult  Json?
+  autoCheckStatus  AutoCheckStatus  @default(NOT_STARTED)
   aiRecommendation Json?
-  confidence      String?
-  warnings        Json?
-  itemOverrides   Json?
-  latestAiRunId   String?
-  manualGrade     Float?
-  maxGrade        Float?
-  comment         String?
-  status          AssessmentStatus @default(PENDING)
-  reviewedAt      DateTime?
-  publishedAt     DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  confidence       String?
+  warnings         Json?
+  itemOverrides    Json?
+  latestAiRunId    String?
+  manualGrade      Float?
+  maxGrade         Float?
+  comment          String?
+  status           AssessmentStatus @default(PENDING)
+  reviewedAt       DateTime?
+  publishedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  attempt    Attempt           @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  teacher    User              @relation("TeacherAssessments", fields: [teacherId], references: [id], onDelete: Cascade)
-  latestAiRun AssessmentAiRun? @relation("LatestAssessmentAiRun", fields: [latestAiRunId], references: [id], onDelete: SetNull)
-  aiRuns     AssessmentAiRun[] @relation("AssessmentAiRuns")
+  attempt         Attempt          @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  reviewerAccount Account          @relation("ReviewerAssessments", fields: [reviewerAccountId], references: [id], onDelete: Cascade)
+  latestAiRun     AssessmentAiRun? @relation("LatestAssessmentAiRun", fields: [latestAiRunId], references: [id], onDelete: SetNull)
+  aiRuns          AssessmentAiRun[] @relation("AssessmentAiRuns")
 
-  @@index([teacherId])
+  @@index([reviewerAccountId])
   @@index([attemptId])
   @@index([autoCheckStatus])
   @@index([latestAiRunId])
@@ -411,26 +783,26 @@ model Assessment {
 }
 
 model AssessmentAiRun {
-  id            String                 @id @default(cuid())
-  assessmentId  String
-  trigger       AssessmentAiRunTrigger
-  status        AssessmentAiRunStatus  @default(QUEUED)
-  model         String
-  promptVersion String
-  inputHash     String
-  resultJson    Json?
-  confidence    String?
-  warnings      Json?
-  error         String?
-  tokenUsage    Json?
-  traceId       String?
-  queuedAt      DateTime               @default(now())
-  startedAt     DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  id             String                @id @default(cuid())
+  assessmentId   String
+  trigger        AssessmentAiRunTrigger
+  status         AssessmentAiRunStatus @default(QUEUED)
+  model          String
+  promptVersion  String
+  inputHash      String
+  resultJson     Json?
+  confidence     String?
+  warnings       Json?
+  error          String?
+  tokenUsage     Json?
+  traceId        String?
+  queuedAt       DateTime              @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
-  assessment         Assessment   @relation("AssessmentAiRuns", fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessment          Assessment   @relation("AssessmentAiRuns", fields: [assessmentId], references: [id], onDelete: Cascade)
   latestForAssessments Assessment[] @relation("LatestAssessmentAiRun")
 
   @@index([assessmentId])

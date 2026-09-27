@@ -18,7 +18,7 @@ export interface DistributionStats {
 }
 
 export interface TeacherAnalytics {
-  teacherId: string;
+  creatorAccountId: string;
   distributions: DistributionStats[];
   totals: {
     distributions: number;
@@ -30,9 +30,11 @@ export interface TeacherAnalytics {
   };
 }
 
-export async function getTeacherAnalytics(teacherId: string): Promise<TeacherAnalytics> {
+export async function getTeacherAnalytics(
+  creatorAccountId: string
+): Promise<TeacherAnalytics> {
   const distributions = await prisma.assignmentDistribution.findMany({
-    where: { teacherId },
+    where: { creatorAccountId },
     include: {
       assignment: { select: { title: true } },
       recipients: {
@@ -98,5 +100,5 @@ export async function getTeacherAnalytics(teacherId: string): Promise<TeacherAna
     { distributions: 0, recipients: 0, submitted: 0, publishedResults: 0, aiHelpAllowed: 0, aiHelpBlocked: 0 }
   );
 
-  return { teacherId, distributions: stats, totals };
+  return { creatorAccountId, distributions: stats, totals };
 }

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { createSession, setSessionCookie } from "@/lib/auth/session";
+import {
+  resolveSessionByToken,
+  setSessionCookie,
+  upsertSessionWithUser,
+} from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { auditLog } from "@/lib/audit/logger";
 import { ok, fail, AuthError, AppError, ValidationError } from "@/lib/errors";
@@ -41,23 +45,61 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!user.isActive) {
-      throw new AuthError("Account is disabled");
+      throw new AuthError("User is disabled");
     }
 
-    const token = await createSession(user.id);
+    const userContext = await prisma.account.findFirst({
+      where: {
+        userId: user.id,
+        isActive: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (!userContext) {
+      throw new AuthError(
+        "No active user context linked to this credential. Contact support."
+      );
+    }
+
+    const token = await upsertSessionWithUser(userContext.id);
     await setSessionCookie(token);
 
+    const session = await resolveSessionByToken(token);
+    if (!session) {
+      throw new AuthError("Session creation failed");
+    }
+
     await auditLog({
-      userId: user.id,
+      userId: session.userId,
+      actorAccountId: session.id,
       action: "auth.login",
       entityType: "user",
-      entityId: user.id,
+      entityId: session.userId,
       context: { ip },
       traceId,
     });
 
     return NextResponse.json(
-      ok({ id: user.id, email: user.email, name: user.name, role: user.role }, traceId)
+      ok(
+        {
+          user: {
+            id: session.userId,
+            email: session.email,
+            name: session.name,
+          },
+          activeUser: {
+            id: session.id,
+            domain: session.domain,
+            displayName: session.displayName,
+            avatarUrl: session.avatarUrl,
+            organizationId: session.organizationId,
+            organizationName: session.organizationName,
+          },
+          users: session.availableUsers,
+        },
+        traceId
+      )
     );
   } catch (err) {
     if (err instanceof AppError) {
@@ -71,3 +113,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 }
+

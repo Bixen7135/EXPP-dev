@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
+﻿import { prisma } from "@/lib/db/prisma";
 import { validateConstraints } from "./constraints";
 import { runGenerationPipeline } from "./pipeline";
 import { NotFoundError, ForbiddenError } from "@/lib/errors";
@@ -14,16 +14,16 @@ import type {
 export { validateConstraints };
 
 export async function createGenerationRequest(opts: {
-  teacherId: string;
+  ownerAccountId: string;
   constraints: unknown;
   materialIds: string[];
 }): Promise<GenerationRequestDetail> {
-  const { teacherId, materialIds } = opts;
+  const { ownerAccountId, materialIds } = opts;
   const constraints = validateConstraints(opts.constraints);
 
   const request = await prisma.generationRequest.create({
     data: {
-      teacherId,
+      ownerAccountId,
       status: "PENDING",
       constraints: constraints as object,
       materialIds,
@@ -33,14 +33,14 @@ export async function createGenerationRequest(opts: {
   // Run pipeline synchronously (Phase 3 — no job queue yet, per ADR-012)
   await runGenerationPipeline(request.id);
 
-  return getGenerationRequest(request.id, teacherId);
+  return getGenerationRequest(request.id, ownerAccountId);
 }
 
 export async function listGenerationRequests(
-  teacherId: string
+  ownerAccountId: string
 ): Promise<GenerationRequestSummary[]> {
   const rows = await prisma.generationRequest.findMany({
-    where: { teacherId },
+    where: { ownerAccountId },
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toSummary);
@@ -48,25 +48,25 @@ export async function listGenerationRequests(
 
 export async function getGenerationRequest(
   id: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<GenerationRequestDetail> {
   const request = await prisma.generationRequest.findUnique({
     where: { id },
     include: { plan: true, result: true },
   });
   if (!request) throw new NotFoundError("Generation request not found");
-  if (request.teacherId !== teacherId) throw new ForbiddenError();
+  if (request.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
   return toDetail(request);
 }
 
 export async function regenerateRequest(
   id: string,
-  teacherId: string,
+  ownerAccountId: string,
   newConstraints?: unknown
 ): Promise<GenerationRequestDetail> {
   const request = await prisma.generationRequest.findUnique({ where: { id } });
   if (!request) throw new NotFoundError("Generation request not found");
-  if (request.teacherId !== teacherId) throw new ForbiddenError();
+  if (request.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
 
   if (newConstraints !== undefined) {
     const validated = validateConstraints(newConstraints);
@@ -84,14 +84,14 @@ export async function regenerateRequest(
   // Re-run pipeline preserving the same request ID (FR-GEN-04)
   await runGenerationPipeline(id);
 
-  return getGenerationRequest(id, teacherId);
+  return getGenerationRequest(id, ownerAccountId);
 }
 
 // ── Mapping helpers ────────────────────────────────────────────────────────
 
 type RequestRow = {
   id: string;
-  teacherId: string;
+  ownerAccountId: string;
   status: string;
   constraints: unknown;
   materialIds: string[];
@@ -113,7 +113,7 @@ type RequestWithRelations = RequestRow & {
 function toSummary(r: RequestRow): GenerationRequestSummary {
   return {
     id: r.id,
-    teacherId: r.teacherId,
+    ownerAccountId: r.ownerAccountId,
     status: r.status as GenerationStatus,
     constraints: r.constraints as unknown as GenerationConstraints,
     materialIds: r.materialIds,
@@ -137,3 +137,4 @@ function toDetail(r: RequestWithRelations): GenerationRequestDetail {
       : null,
   };
 }
+

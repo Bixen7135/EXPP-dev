@@ -1,4 +1,4 @@
-﻿import { createHash } from "crypto";
+import { createHash } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { auditLog } from "@/lib/audit/logger";
 import { NotFoundError, ForbiddenError, ValidationError } from "@/lib/errors";
@@ -22,11 +22,11 @@ const DEFAULT_AI_MODEL = process.env.AI_MODEL ?? "gpt-4o-mini";
 
 export async function getOrCreateAssessment(
   attemptId: string,
-  teacherId: string
+  reviewerAccountId: string
 ): Promise<AssessmentDetail> {
   const context = await loadAttemptWithAssessmentContext(attemptId);
   if (!context) throw new NotFoundError("Attempt not found");
-  if (context.recipient.distribution.teacherId !== teacherId) {
+  if (context.recipient.distribution.creatorAccountId !== reviewerAccountId) {
     throw new ForbiddenError();
   }
 
@@ -38,7 +38,7 @@ export async function getOrCreateAssessment(
 
 export async function getAssessmentForTeacher(
   attemptId: string,
-  teacherId: string
+  reviewerAccountId: string
 ): Promise<AssessmentDetail> {
   const assessment = await prisma.assessment.findUnique({
     where: { attemptId },
@@ -46,7 +46,7 @@ export async function getAssessmentForTeacher(
   });
 
   if (!assessment) throw new NotFoundError("Assessment not found");
-  if (assessment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assessment.reviewerAccountId !== reviewerAccountId) throw new ForbiddenError();
 
   return toAssessmentDetail(assessment);
 }
@@ -55,7 +55,7 @@ export async function getAssessmentForTeacher(
 
 export interface SubmissionSummary {
   attemptId: string;
-  studentId: string;
+  recipientAccountId: string;
   submittedAt: Date | null;
   recipientId: string;
   assessmentStatus: string | null;
@@ -64,15 +64,15 @@ export interface SubmissionSummary {
 
 export async function listSubmissionsForDistribution(
   distributionId: string,
-  teacherId: string
+  creatorAccountId: string
 ): Promise<SubmissionSummary[]> {
   const distribution = await prisma.assignmentDistribution.findUnique({
     where: { id: distributionId },
-    select: { teacherId: true },
+    select: { creatorAccountId: true },
   });
 
   if (!distribution) throw new NotFoundError("Distribution not found");
-  if (distribution.teacherId !== teacherId) throw new ForbiddenError();
+  if (distribution.creatorAccountId !== creatorAccountId) throw new ForbiddenError();
 
   const recipients = await prisma.assignmentRecipient.findMany({
     where: { distributionId },
@@ -87,7 +87,7 @@ export async function listSubmissionsForDistribution(
 
   return recipients.map((recipient) => ({
     recipientId: recipient.id,
-    studentId: recipient.studentId,
+    recipientAccountId: recipient.recipientAccountId,
     submittedAt: recipient.attempt?.submittedAt ?? null,
     attemptId: recipient.attempt?.id ?? "",
     assessmentStatus: recipient.attempt?.assessment?.status ?? null,
@@ -110,7 +110,7 @@ export async function queueAutoAnalysisForAttempt(
   const { assessment } = await ensureAssessmentExists(context);
   await enqueueAssessmentRun({
     attemptId,
-    teacherId: context.recipient.distribution.teacherId,
+    reviewerAccountId: context.recipient.distribution.creatorAccountId,
     assessmentId: assessment.id,
     trigger: "AUTO_ON_SUBMIT",
     traceId,
@@ -120,17 +120,17 @@ export async function queueAutoAnalysisForAttempt(
 
 export async function triggerAssessmentAnalysis(
   attemptId: string,
-  teacherId: string,
+  reviewerAccountId: string,
   traceId: string
 ): Promise<AssessmentDetail> {
   const context = await loadAttemptWithAssessmentContext(attemptId);
   if (!context) throw new NotFoundError("Attempt not found");
-  if (context.recipient.distribution.teacherId !== teacherId) throw new ForbiddenError();
+  if (context.recipient.distribution.creatorAccountId !== reviewerAccountId) throw new ForbiddenError();
 
   const { assessment } = await ensureAssessmentExists(context);
   await enqueueAssessmentRun({
     attemptId,
-    teacherId,
+    reviewerAccountId,
     assessmentId: assessment.id,
     trigger: "MANUAL_RERUN",
     traceId,
@@ -208,7 +208,7 @@ export async function processAssessmentAiJob(opts: {
   });
 
   await auditLog({
-    userId: run.assessment.teacherId,
+    actorAccountId: run.assessment.reviewerAccountId,
     action: "assessment.ai_started",
     entityType: "AssessmentAiRun",
     entityId: run.id,
@@ -288,7 +288,7 @@ export async function processAssessmentAiJob(opts: {
     });
 
     await auditLog({
-      userId: run.assessment.teacherId,
+      actorAccountId: run.assessment.reviewerAccountId,
       action: "assessment.ai_ready",
       entityType: "AssessmentAiRun",
       entityId: run.id,
@@ -326,7 +326,7 @@ export async function processAssessmentAiJob(opts: {
     });
 
     await auditLog({
-      userId: run.assessment.teacherId,
+      actorAccountId: run.assessment.reviewerAccountId,
       action: "assessment.ai_failed",
       entityType: "AssessmentAiRun",
       entityId: run.id,
@@ -354,7 +354,7 @@ export async function processAssessmentAiJob(opts: {
 
 export async function reviewAssessment(
   attemptId: string,
-  teacherId: string,
+  reviewerAccountId: string,
   opts: {
     manualGrade: number;
     maxGrade: number;
@@ -368,7 +368,7 @@ export async function reviewAssessment(
   });
 
   if (!assessment) throw new NotFoundError("Assessment not found");
-  if (assessment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assessment.reviewerAccountId !== reviewerAccountId) throw new ForbiddenError();
   if (assessment.status === "PUBLISHED") {
     throw new ValidationError("Cannot modify a published assessment. Re-publish to update.");
   }
@@ -401,7 +401,7 @@ export async function reviewAssessment(
 
 export async function publishAssessment(
   attemptId: string,
-  teacherId: string
+  reviewerAccountId: string
 ): Promise<AssessmentDetail> {
   const assessment = await prisma.assessment.findUnique({
     where: { attemptId },
@@ -409,7 +409,7 @@ export async function publishAssessment(
   });
 
   if (!assessment) throw new NotFoundError("Assessment not found");
-  if (assessment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assessment.reviewerAccountId !== reviewerAccountId) throw new ForbiddenError();
 
   if (assessment.status !== "REVIEWED") {
     throw new ValidationError("Assessment must be in REVIEWED status to publish");
@@ -428,15 +428,15 @@ export async function publishAssessment(
 
 export async function getStudentResult(
   attemptId: string,
-  studentId: string
+  learnerAccountId: string
 ): Promise<StudentResult> {
   const attempt = await prisma.attempt.findUnique({
     where: { id: attemptId },
-    select: { studentId: true, assessment: true },
+    select: { learnerAccountId: true, assessment: true },
   });
 
   if (!attempt) throw new NotFoundError("Attempt not found");
-  if (attempt.studentId !== studentId) throw new ForbiddenError();
+  if (attempt.learnerAccountId !== learnerAccountId) throw new ForbiddenError();
 
   const assessment = attempt.assessment;
   if (!assessment || assessment.status !== "PUBLISHED") {
@@ -462,7 +462,7 @@ type AttemptWithAssessmentContext = {
   answers: unknown;
   recipient: {
     distribution: {
-      teacherId: string;
+      creatorAccountId: string;
       version: { content: unknown };
     };
   };
@@ -509,7 +509,7 @@ async function ensureAssessmentExists(context: AttemptWithAssessmentContext): Pr
   const created = await prisma.assessment.create({
     data: {
       attemptId: context.id,
-      teacherId: context.recipient.distribution.teacherId,
+      reviewerAccountId: context.recipient.distribution.creatorAccountId,
       autoCheckResult: autoCheckResult as object,
       autoCheckStatus: "NOT_STARTED",
       status: "AUTO_CHECKED",
@@ -525,7 +525,7 @@ async function ensureAssessmentExists(context: AttemptWithAssessmentContext): Pr
 async function enqueueAssessmentRun(opts: {
   assessmentId: string;
   attemptId: string;
-  teacherId: string;
+  reviewerAccountId: string;
   trigger: AssessmentAiRunTrigger;
   traceId: string;
   context: AttemptWithAssessmentContext;
@@ -593,14 +593,14 @@ async function enqueueAssessmentRun(opts: {
     runId: run.id,
     assessmentId: opts.assessmentId,
     attemptId: opts.attemptId,
-    teacherId: opts.teacherId,
+    reviewerAccountId: opts.reviewerAccountId,
     trigger: opts.trigger,
     traceId: opts.traceId,
     idempotencyKey: `${opts.assessmentId}:${inputHash}:${opts.trigger}`,
   });
 
   await auditLog({
-    userId: opts.teacherId,
+    actorAccountId: opts.reviewerAccountId,
     action: opts.trigger === "MANUAL_RERUN" ? "assessment.ai_rerun" : "assessment.ai_queued",
     entityType: "AssessmentAiRun",
     entityId: run.id,
@@ -721,7 +721,7 @@ type AssessmentAiRunRow = {
 type AssessmentRow = {
   id: string;
   attemptId: string;
-  teacherId: string;
+  reviewerAccountId: string;
   autoCheckResult: unknown;
   autoCheckStatus: string;
   aiRecommendation: unknown;
@@ -745,7 +745,7 @@ function toAssessmentDetail(row: AssessmentRow): AssessmentDetail {
   return {
     id: row.id,
     attemptId: row.attemptId,
-    teacherId: row.teacherId,
+    reviewerAccountId: row.reviewerAccountId,
     status: row.status as AssessmentDetail["status"],
     autoCheckStatus: row.autoCheckStatus as AssessmentDetail["autoCheckStatus"],
     autoCheckResult: row.autoCheckResult as AssessmentDetail["autoCheckResult"],
@@ -782,5 +782,4 @@ function toAssessmentAiRunSummary(row: AssessmentAiRunRow): AssessmentAiRunSumma
     updatedAt: row.updatedAt,
   };
 }
-
 

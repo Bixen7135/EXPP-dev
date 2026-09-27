@@ -106,7 +106,7 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
           distributionStatus,
           isGraded,
           aiHelpMode: effectiveMode,
-          recipientStudentIds: ids,
+          recipientUserIds: ids,
         }),
       });
       const data = await res.json();

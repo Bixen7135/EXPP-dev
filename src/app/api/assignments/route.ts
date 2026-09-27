@@ -3,12 +3,13 @@ import { resolveSession } from "@/lib/auth/session";
 import { ok, fail } from "@/lib/errors";
 import { listAssignments, createAssignment } from "@/modules/assignments/service";
 import { auditLog } from "@/lib/audit/logger";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "TEACHER" && session.role !== "ADMIN")
+  if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   const list = await listAssignments(session.id);
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "TEACHER" && session.role !== "ADMIN")
+  if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   try {
@@ -30,12 +31,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(fail("generationResultId is required", "VALIDATION_ERROR", traceId), { status: 422 });
 
     const assignment = await createAssignment({
-      teacherId: session.id,
+      ownerAccountId: session.id,
       generationResultId,
     });
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "assignment.created",
       entityType: "Assignment",
       entityId: assignment.id,
@@ -53,3 +56,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     throw err;
   }
 }
+

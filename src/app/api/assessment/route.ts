@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { ok, fail } from "@/lib/errors";
 import { listSubmissionsForDistribution } from "@/modules/assessment/service";
 
-// GET — teacher lists submissions for a distribution
+// GET ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â teacher lists submissions for a distribution
 // Query: ?distributionId=...
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "TEACHER")
+  if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   const distributionId = req.nextUrl.searchParams.get("distributionId");

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveSession } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/logger";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { ok, fail, AppError } from "@/lib/errors";
 import {
   getMaterial,
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest, { params }: Params): Promise<Nex
     if (!session) {
       return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
     }
 
@@ -48,14 +49,16 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
     if (!session) {
       return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
     }
 
     await deleteMaterial(id, session.id);
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "material.delete",
       entityType: "material",
       entityId: id,
@@ -81,7 +84,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     if (!session) {
       return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
     }
 
@@ -95,12 +98,14 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
 
     const material = await moveMaterialToFolder({
       materialId: id,
-      teacherId: session.id,
+      ownerAccountId: session.id,
       folderId: parsed.data.folderId,
     });
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "material.move",
       entityType: "material",
       entityId: id,

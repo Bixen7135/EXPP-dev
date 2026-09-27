@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { ok, fail } from "@/lib/errors";
 import { publishAssignment } from "@/modules/assignments/service";
 import { auditLog } from "@/lib/audit/logger";
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest, { params }: Params): Promise<NextRe
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "TEACHER" && session.role !== "ADMIN")
+  if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   try {

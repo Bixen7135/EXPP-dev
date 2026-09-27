@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessStudentWorkspace } from "@/lib/auth/authorization";
 import { ok, fail } from "@/lib/errors";
 import { getOrCreateAttempt } from "@/modules/completion/service";
 import { listStudentAssignments } from "@/modules/distribution/service";
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "STUDENT")
+  if (!canAccessStudentWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   const assignments = await listStudentAssignments(session.id);
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "STUDENT")
+  if (!canAccessStudentWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   try {

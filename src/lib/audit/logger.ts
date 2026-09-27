@@ -7,6 +7,9 @@ export async function auditLog(payload: AuditEventPayload): Promise<void> {
     await prisma.auditEvent.create({
       data: {
         userId: payload.userId ?? null,
+        actorAccountId: payload.actorAccountId ?? null,
+        organizationId: payload.organizationId ?? null,
+        institutionId: payload.institutionId ?? null,
         action: payload.action,
         entityType: payload.entityType ?? null,
         entityId: payload.entityId ?? null,
@@ -23,3 +26,4 @@ export async function auditLog(payload: AuditEventPayload): Promise<void> {
     });
   }
 }
+

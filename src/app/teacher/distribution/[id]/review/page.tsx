@@ -95,7 +95,7 @@ export default async function DistributionReviewPage({ params }: Props) {
             return (
               <li key={s.attemptId} className="border rounded-lg p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-mono text-gray-700">{s.studentId}</p>
+                  <p className="text-sm font-mono text-gray-700">{s.recipientAccountId}</p>
                   {s.submittedAt && (
                     <p className="text-xs text-gray-400 mt-0.5">
                       Submitted {new Date(s.submittedAt).toLocaleString()}

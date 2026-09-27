@@ -30,6 +30,9 @@ describe("auditLog", () => {
     expect(prisma.auditEvent.create).toHaveBeenCalledWith({
       data: {
         userId: "user-1",
+        actorAccountId: null,
+        organizationId: null,
+        institutionId: null,
         action: "auth.login",
         entityType: "user",
         entityId: "user-1",
@@ -55,3 +58,4 @@ describe("auditLog", () => {
     ).resolves.not.toThrow();
   });
 });
+

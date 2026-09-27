@@ -2,16 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { hashPassword } from "@/lib/auth/password";
-import { createSession, setSessionCookie } from "@/lib/auth/session";
+import {
+  resolveSessionByToken,
+  setSessionCookie,
+  upsertSessionWithUser,
+} from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { auditLog } from "@/lib/audit/logger";
 import { ok, fail, AppError, ValidationError } from "@/lib/errors";
+import { createGlobalUser } from "@/modules/users/service";
 
 const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(128),
   name: z.string().min(1).max(100),
-  role: z.enum(["STUDENT", "TEACHER"]),
+  userDisplayName: z.string().min(1).max(120).optional(),
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -27,7 +32,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new ValidationError(parsed.error.issues[0]?.message ?? "Invalid input");
     }
 
-    const { email, password, name, role } = parsed.data;
+    const { email, password, name, userDisplayName } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -36,23 +41,52 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({
-      data: { email, passwordHash, name, role },
+      data: { email, passwordHash, name },
     });
 
-    const token = await createSession(user.id);
+    const userContext = await createGlobalUser({
+      userId: user.id,
+      displayName: userDisplayName ?? name,
+    });
+
+    const token = await upsertSessionWithUser(userContext.id);
     await setSessionCookie(token);
 
+    const session = await resolveSessionByToken(token);
+    if (!session) {
+      throw new AppError("Session creation failed", "AUTH_ERROR", 500);
+    }
+
     await auditLog({
-      userId: user.id,
+      userId: session.userId,
+      actorAccountId: session.id,
       action: "auth.register",
       entityType: "user",
-      entityId: user.id,
-      context: { ip, role },
+      entityId: session.userId,
+      context: { ip, domain: userContext.domain },
       traceId,
     });
 
     return NextResponse.json(
-      ok({ id: user.id, email: user.email, name: user.name, role: user.role }, traceId),
+      ok(
+        {
+          user: {
+            id: session.userId,
+            email: session.email,
+            name: session.name,
+          },
+          activeUser: {
+            id: session.id,
+            domain: session.domain,
+            displayName: session.displayName,
+            avatarUrl: session.avatarUrl,
+            organizationId: session.organizationId,
+            organizationName: session.organizationName,
+          },
+          users: session.availableUsers,
+        },
+        traceId
+      ),
       { status: 201 }
     );
   } catch (err) {
@@ -67,3 +101,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 }
+

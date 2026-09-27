@@ -50,9 +50,13 @@ export interface AuditContext {
 
 export interface AuditEventPayload {
   userId?: string;
+  actorAccountId?: string;
+  organizationId?: string;
+  institutionId?: string;
   action: AuditAction;
   entityType?: string;
   entityId?: string;
   context?: AuditContext;
   traceId: string;
 }
+

@@ -7,7 +7,7 @@ export interface AssessmentAiJobData {
   runId: string;
   assessmentId: string;
   attemptId: string;
-  teacherId: string;
+  reviewerAccountId: string;
   trigger: AssessmentAiRunTrigger;
   traceId: string;
   idempotencyKey: string;

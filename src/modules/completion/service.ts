@@ -7,7 +7,7 @@ import { toStudentContent, type AttemptAnswer, type AttemptDetail } from "./type
 
 export async function getOrCreateAttempt(
   recipientId: string,
-  studentId: string
+  learnerAccountId: string
 ): Promise<AttemptDetail> {
   const recipient = await prisma.assignmentRecipient.findUnique({
     where: { id: recipientId },
@@ -22,7 +22,7 @@ export async function getOrCreateAttempt(
   });
 
   if (!recipient) throw new NotFoundError("Recipient record not found");
-  if (recipient.studentId !== studentId) throw new ForbiddenError();
+  if (recipient.recipientAccountId !== learnerAccountId) throw new ForbiddenError();
 
   let attempt = recipient.attempt;
 
@@ -30,7 +30,7 @@ export async function getOrCreateAttempt(
     // First access â€” create the attempt and mark recipient as ACTIVE
     attempt = await prisma.$transaction(async (tx) => {
       const created = await tx.attempt.create({
-        data: { recipientId, studentId, answers: [], status: "DRAFT" },
+        data: { recipientId, learnerAccountId, answers: [], status: "DRAFT" },
       });
       await tx.assignmentRecipient.update({
         where: { id: recipientId },
@@ -47,7 +47,7 @@ export async function getOrCreateAttempt(
 
 export async function saveDraft(
   attemptId: string,
-  studentId: string,
+  learnerAccountId: string,
   answers: AttemptAnswer[]
 ): Promise<AttemptDetail> {
   const attempt = await prisma.attempt.findUnique({
@@ -62,7 +62,7 @@ export async function saveDraft(
   });
 
   if (!attempt) throw new NotFoundError("Attempt not found");
-  if (attempt.studentId !== studentId) throw new ForbiddenError();
+  if (attempt.learnerAccountId !== learnerAccountId) throw new ForbiddenError();
   if (attempt.status === "SUBMITTED") {
     throw new ValidationError("Cannot edit a submitted attempt");
   }
@@ -86,7 +86,7 @@ export async function saveDraft(
 
 export async function submitAttempt(
   attemptId: string,
-  studentId: string
+  learnerAccountId: string
 ): Promise<AttemptDetail> {
   const attempt = await prisma.attempt.findUnique({
     where: { id: attemptId },
@@ -100,7 +100,7 @@ export async function submitAttempt(
   });
 
   if (!attempt) throw new NotFoundError("Attempt not found");
-  if (attempt.studentId !== studentId) throw new ForbiddenError();
+  if (attempt.learnerAccountId !== learnerAccountId) throw new ForbiddenError();
   if (attempt.status === "SUBMITTED") {
     throw new ValidationError("Attempt has already been submitted");
   }
@@ -131,7 +131,7 @@ export async function submitAttempt(
 
 export async function getAttempt(
   attemptId: string,
-  studentId: string
+  learnerAccountId: string
 ): Promise<AttemptDetail> {
   const attempt = await prisma.attempt.findUnique({
     where: { id: attemptId },
@@ -145,7 +145,7 @@ export async function getAttempt(
   });
 
   if (!attempt) throw new NotFoundError("Attempt not found");
-  if (attempt.studentId !== studentId) throw new ForbiddenError();
+  if (attempt.learnerAccountId !== learnerAccountId) throw new ForbiddenError();
 
   return buildAttemptDetail(attempt, attempt.recipient.distribution);
 }
@@ -155,7 +155,7 @@ export async function getAttempt(
 type AttemptRow = {
   id: string;
   recipientId: string;
-  studentId: string;
+  learnerAccountId: string;
   answers: unknown;
   status: string;
   submittedAt: Date | null;
@@ -176,7 +176,7 @@ function buildAttemptDetail(row: AttemptRow, dist: DistributionContext): Attempt
   return {
     id: row.id,
     recipientId: row.recipientId,
-    studentId: row.studentId,
+    learnerAccountId: row.learnerAccountId,
     status: row.status as "DRAFT" | "SUBMITTED",
     answers: (row.answers as unknown as AttemptAnswer[]) ?? [],
     submittedAt: row.submittedAt,
@@ -193,5 +193,3 @@ function buildAttemptDetail(row: AttemptRow, dist: DistributionContext): Attempt
     },
   };
 }
-
-

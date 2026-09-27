@@ -159,7 +159,7 @@ describe("validateFileSize", () => {
 });
 
 describe("uploadMaterial", () => {
-  const teacherId = "teacher_01";
+  const ownerAccountId = "teacher_01";
   const buffer = Buffer.from("Hello PDF content");
 
   beforeEach(() => {
@@ -167,7 +167,7 @@ describe("uploadMaterial", () => {
 
     const fakeMaterial = {
       id: "mat_01",
-      teacherId,
+      ownerAccountId,
       title: "Test Material",
       originalFilename: "test.txt",
       mimeType: "text/plain",
@@ -191,7 +191,7 @@ describe("uploadMaterial", () => {
 
   it("creates a material record and returns READY status", async () => {
     const result = await uploadMaterial({
-      teacherId,
+      ownerAccountId,
       title: "Test Material",
       originalFilename: "test.txt",
       mimeType: "text/plain",
@@ -207,7 +207,7 @@ describe("uploadMaterial", () => {
   it("throws ValidationError for disallowed file type", async () => {
     await expect(
       uploadMaterial({
-        teacherId,
+        ownerAccountId,
         title: "Bad file",
         originalFilename: "malware.exe",
         mimeType: "application/octet-stream",
@@ -220,7 +220,7 @@ describe("uploadMaterial", () => {
 
   it("normalizes generic MIME type based on extension", async () => {
     await uploadMaterial({
-      teacherId,
+      ownerAccountId,
       title: "Markdown Material",
       originalFilename: "notes.md",
       mimeType: "application/octet-stream",
@@ -238,14 +238,14 @@ describe("uploadMaterial", () => {
 describe("listMaterials", () => {
   it("returns only the teacher's materials", async () => {
     const rows = [
-      { id: "m1", teacherId: "t1", title: "A", originalFilename: "a.pdf", mimeType: "application/pdf", fileSize: 100, storagePath: "", extractedText: null, status: "READY", createdAt: new Date(), updatedAt: new Date(), tags: [] },
+      { id: "m1", ownerAccountId: "t1", title: "A", originalFilename: "a.pdf", mimeType: "application/pdf", fileSize: 100, storagePath: "", extractedText: null, status: "READY", createdAt: new Date(), updatedAt: new Date(), tags: [] },
     ];
     mockPrisma.material.findMany.mockResolvedValue(rows);
 
     const result = await listMaterials("t1");
     expect(result).toHaveLength(1);
     expect(mockPrisma.material.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { teacherId: "t1" } })
+      expect.objectContaining({ where: { ownerAccountId: "t1" } })
     );
   });
 });
@@ -253,7 +253,7 @@ describe("listMaterials", () => {
 describe("getMaterial", () => {
   it("returns material for the owning teacher", async () => {
     mockPrisma.material.findUnique.mockResolvedValue({
-      id: "m1", teacherId: "t1", title: "A", originalFilename: "a.pdf",
+      id: "m1", ownerAccountId: "t1", title: "A", originalFilename: "a.pdf",
       mimeType: "application/pdf", fileSize: 100, storagePath: "/path",
       extractedText: "text", status: "READY", createdAt: new Date(), updatedAt: new Date(), tags: [],
     });
@@ -264,7 +264,7 @@ describe("getMaterial", () => {
 
   it("throws ForbiddenError when a different teacher requests the material", async () => {
     mockPrisma.material.findUnique.mockResolvedValue({
-      id: "m1", teacherId: "t1", title: "A", originalFilename: "a.pdf",
+      id: "m1", ownerAccountId: "t1", title: "A", originalFilename: "a.pdf",
       mimeType: "application/pdf", fileSize: 100, storagePath: "/path",
       extractedText: "text", status: "READY", createdAt: new Date(), updatedAt: new Date(), tags: [],
     });
@@ -281,7 +281,7 @@ describe("getMaterial", () => {
 describe("deleteMaterial", () => {
   it("deletes the material for the owning teacher", async () => {
     mockPrisma.material.findUnique.mockResolvedValue({
-      id: "m1", teacherId: "t1", storagePath: "/path/file.txt",
+      id: "m1", ownerAccountId: "t1", storagePath: "/path/file.txt",
     });
     mockPrisma.material.delete.mockResolvedValue({});
 
@@ -291,7 +291,7 @@ describe("deleteMaterial", () => {
 
   it("throws ForbiddenError when a different teacher tries to delete", async () => {
     mockPrisma.material.findUnique.mockResolvedValue({
-      id: "m1", teacherId: "t1", storagePath: "/path/file.txt",
+      id: "m1", ownerAccountId: "t1", storagePath: "/path/file.txt",
     });
 
     await expect(deleteMaterial("m1", "t2")).rejects.toThrow(ForbiddenError);

@@ -3,12 +3,13 @@ import { resolveSession } from "@/lib/auth/session";
 import { ok, fail } from "@/lib/errors";
 import { createDistribution, listDistributions } from "@/modules/distribution/service";
 import { auditLog } from "@/lib/audit/logger";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "TEACHER" && session.role !== "ADMIN")
+  if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   const distributions = await listDistributions(session.id);
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "TEACHER" && session.role !== "ADMIN")
+  if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   try {
@@ -31,35 +32,40 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       distributionStatus,
       isGraded,
       aiHelpMode,
-      recipientStudentIds,
+      recipientSources,
+      recipientUserIds,
+      includeUserIds,
+      excludeUserIds,
     } = body ?? {};
 
     if (!assignmentId || typeof assignmentId !== "string")
       return NextResponse.json(fail("assignmentId is required", "VALIDATION_ERROR", traceId), { status: 422 });
     if (!versionId || typeof versionId !== "string")
       return NextResponse.json(fail("versionId is required", "VALIDATION_ERROR", traceId), { status: 422 });
-    if (!Array.isArray(recipientStudentIds) || recipientStudentIds.length === 0)
-      return NextResponse.json(fail("recipientStudentIds must be a non-empty array", "VALIDATION_ERROR", traceId), { status: 422 });
-
     const distribution = await createDistribution({
       assignmentId,
       versionId,
-      teacherId: session.id,
+      creatorUserId: session.id,
       deadline: deadline ? new Date(deadline) : null,
       distributionStatus: distributionStatus ?? "MANDATORY",
       isGraded: isGraded !== false,
       aiHelpMode: aiHelpMode ?? "NO_HELP",
-      recipientStudentIds,
+      recipientSources: Array.isArray(recipientSources) ? recipientSources : [],
+      recipientUserIds: Array.isArray(recipientUserIds) ? recipientUserIds : [],
+      includeUserIds: Array.isArray(includeUserIds) ? includeUserIds : [],
+      excludeUserIds: Array.isArray(excludeUserIds) ? excludeUserIds : [],
     });
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "distribution.created",
       entityType: "AssignmentDistribution",
       entityId: distribution.id,
       context: {
         assignmentId,
-        recipientCount: recipientStudentIds.length,
+        recipientCount: distribution.recipients.length,
         aiHelpMode,
         distributionStatus,
       },
@@ -74,3 +80,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     throw err;
   }
 }
+

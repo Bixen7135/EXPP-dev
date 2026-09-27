@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveSession } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/logger";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { ok, fail, AppError, ForbiddenError, ValidationError } from "@/lib/errors";
 import { uploadMaterial, listMaterials } from "@/modules/materials/service";
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (!session) {
       return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
     }
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!session) {
       return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       throw new ForbiddenError();
     }
 
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const buffer = Buffer.from(arrayBuffer);
 
     const material = await uploadMaterial({
-      teacherId: session.id,
+      ownerAccountId: session.id,
       title: resolvedTitle,
       originalFilename,
       mimeType,
@@ -122,7 +123,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "material.upload",
       entityType: "material",
       entityId: material.id,
@@ -139,3 +142,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(fail("Internal server error", "SERVER_ERROR", traceId), { status: 500 });
   }
 }
+

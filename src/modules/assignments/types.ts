@@ -27,7 +27,7 @@ export interface AssignmentContent {
 export interface AssignmentVersionSummary {
   id: string;
   versionNumber: number;
-  authorId: string;
+  authorAccountId: string;
   changeDescription: string | null;
   createdAt: Date;
 }
@@ -38,7 +38,7 @@ export interface AssignmentVersionDetail extends AssignmentVersionSummary {
 
 export interface AssignmentSummary {
   id: string;
-  teacherId: string;
+  ownerAccountId: string;
   generationResultId: string | null;
   title: string;
   status: AssignmentStatus;

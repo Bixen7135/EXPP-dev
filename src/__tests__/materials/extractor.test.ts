@@ -105,7 +105,7 @@ describe("materials extractor", () => {
 
   it("extracts text from DOCX via mammoth", async () => {
     const buffer = Buffer.from("fake docx bytes");
-    vi.mocked(extractRawText).mockResolvedValue({ value: "docx text" });
+    vi.mocked(extractRawText).mockResolvedValue({ value: "docx text", messages: [] });
 
     const result = await extractText(
       buffer,

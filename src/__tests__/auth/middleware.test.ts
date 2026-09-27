@@ -11,19 +11,19 @@ describe("matchRouteRule", () => {
   it("matches /teacher prefix", () => {
     const rule = matchRouteRule("/teacher/materials");
     expect(rule).not.toBeNull();
-    expect(rule?.allowedRoles).toContain("TEACHER");
+    expect(rule?.requiredPermissions).toContain("workspace.teacher");
   });
 
   it("matches /student prefix", () => {
     const rule = matchRouteRule("/student/assignments");
     expect(rule).not.toBeNull();
-    expect(rule?.allowedRoles).toContain("STUDENT");
+    expect(rule?.requiredPermissions).toContain("workspace.student");
   });
 
   it("matches /admin prefix", () => {
     const rule = matchRouteRule("/admin/users");
     expect(rule).not.toBeNull();
-    expect(rule?.allowedRoles).toContain("ADMIN");
+    expect(rule?.requiredPermissions).toContain("workspace.admin");
   });
 
   it("returns null for unprotected paths", () => {
@@ -34,35 +34,40 @@ describe("matchRouteRule", () => {
 });
 
 describe("isAllowed", () => {
-  it("allows TEACHER on teacher route", () => {
+  it("allows teacher permission on teacher route", () => {
     const rule = matchRouteRule("/teacher/dashboard")!;
-    expect(isAllowed("TEACHER", rule)).toBe(true);
+    expect(isAllowed(["workspace.teacher"], rule)).toBe(true);
   });
 
-  it("allows ADMIN on teacher route", () => {
+  it("allows admin permission on teacher route", () => {
     const rule = matchRouteRule("/teacher/dashboard")!;
-    expect(isAllowed("ADMIN", rule)).toBe(true);
+    expect(isAllowed(["workspace.admin"], rule)).toBe(true);
   });
 
-  it("denies STUDENT on teacher route", () => {
+  it("denies student permission on teacher route", () => {
     const rule = matchRouteRule("/teacher/dashboard")!;
-    expect(isAllowed("STUDENT", rule)).toBe(false);
+    expect(isAllowed(["workspace.student"], rule)).toBe(false);
   });
 
-  it("allows STUDENT on student route", () => {
+  it("allows student on student route", () => {
     const rule = matchRouteRule("/student/assignments")!;
-    expect(isAllowed("STUDENT", rule)).toBe(true);
+    expect(isAllowed(["workspace.student"], rule)).toBe(true);
   });
 
-  it("denies TEACHER on student route", () => {
+  it("denies teacher on student route", () => {
     const rule = matchRouteRule("/student/assignments")!;
-    expect(isAllowed("TEACHER", rule)).toBe(false);
+    expect(isAllowed(["workspace.teacher"], rule)).toBe(false);
   });
 
-  it("allows only ADMIN on admin route", () => {
+  it("allows only admin permission on admin route", () => {
     const rule = matchRouteRule("/admin/users")!;
-    expect(isAllowed("ADMIN", rule)).toBe(true);
-    expect(isAllowed("TEACHER", rule)).toBe(false);
-    expect(isAllowed("STUDENT", rule)).toBe(false);
+    expect(isAllowed(["workspace.admin"], rule)).toBe(true);
+    expect(isAllowed(["workspace.teacher"], rule)).toBe(false);
+    expect(isAllowed(["workspace.student"], rule)).toBe(false);
+  });
+
+  it("allows wildcard permission", () => {
+    const rule = matchRouteRule("/admin/users")!;
+    expect(isAllowed(["*"], rule)).toBe(true);
   });
 });

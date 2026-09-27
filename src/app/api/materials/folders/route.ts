@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { ok, fail, AppError, ForbiddenError } from "@/lib/errors";
 import {
   createMaterialFolder,
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         status: 401,
       });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), {
         status: 403,
       });
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         status: 401,
       });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       throw new ForbiddenError();
     }
 
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const folder = await createMaterialFolder({
-      teacherId: session.id,
+      ownerAccountId: session.id,
       name: parsed.data.name,
       parentId: parsed.data.parentId ?? null,
     });

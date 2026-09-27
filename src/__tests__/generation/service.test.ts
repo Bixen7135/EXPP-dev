@@ -46,7 +46,7 @@ const validConstraints = {
 
 const fakeRequest = {
   id: "req_01",
-  teacherId: "teacher_01",
+  ownerAccountId: "teacher_01",
   status: "READY",
   constraints: validConstraints,
   materialIds: [],
@@ -76,7 +76,7 @@ describe("createGenerationRequest", () => {
   beforeEach(() => {
     mockPrisma.generationRequest.create.mockResolvedValue({
       id: "req_01",
-      teacherId: "teacher_01",
+      ownerAccountId: "teacher_01",
       status: "PENDING",
       constraints: validConstraints,
       materialIds: [],
@@ -88,7 +88,7 @@ describe("createGenerationRequest", () => {
 
   it("validates constraints and creates a request", async () => {
     const result = await createGenerationRequest({
-      teacherId: "teacher_01",
+      ownerAccountId: "teacher_01",
       constraints: validConstraints,
       materialIds: [],
     });
@@ -101,7 +101,7 @@ describe("createGenerationRequest", () => {
   it("throws ValidationError for invalid constraints without creating a DB record", async () => {
     await expect(
       createGenerationRequest({
-        teacherId: "teacher_01",
+        ownerAccountId: "teacher_01",
         constraints: { topic: "", difficulty: "MEDIUM", format: "SINGLE_ASSIGNMENT", questionCount: 3 },
         materialIds: [],
       })
@@ -113,7 +113,7 @@ describe("createGenerationRequest", () => {
   it("throws ValidationError when questionCount is out of range", async () => {
     await expect(
       createGenerationRequest({
-        teacherId: "teacher_01",
+        ownerAccountId: "teacher_01",
         constraints: { ...validConstraints, questionCount: 25 },
         materialIds: [],
       })
@@ -124,7 +124,7 @@ describe("createGenerationRequest", () => {
 describe("listGenerationRequests", () => {
   it("returns only requests for the given teacher", async () => {
     const rows = [
-      { id: "req_01", teacherId: "t1", status: "READY", constraints: validConstraints, materialIds: [], createdAt: new Date(), updatedAt: new Date() },
+      { id: "req_01", ownerAccountId: "t1", status: "READY", constraints: validConstraints, materialIds: [], createdAt: new Date(), updatedAt: new Date() },
     ];
     mockPrisma.generationRequest.findMany.mockResolvedValue(rows);
 
@@ -132,7 +132,7 @@ describe("listGenerationRequests", () => {
 
     expect(result).toHaveLength(1);
     expect(mockPrisma.generationRequest.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { teacherId: "t1" } })
+      expect.objectContaining({ where: { ownerAccountId: "t1" } })
     );
   });
 });
@@ -165,7 +165,7 @@ describe("regenerateRequest", () => {
   beforeEach(() => {
     mockPrisma.generationRequest.findUnique.mockResolvedValue({
       id: "req_01",
-      teacherId: "teacher_01",
+      ownerAccountId: "teacher_01",
       status: "READY",
       constraints: validConstraints,
       materialIds: [],
@@ -182,7 +182,7 @@ describe("regenerateRequest", () => {
     mockPrisma.generationRequest.findUnique
       .mockResolvedValueOnce({
         id: "req_01",
-        teacherId: "teacher_01",
+        ownerAccountId: "teacher_01",
         status: "READY",
         constraints: validConstraints,
         materialIds: [],
@@ -214,7 +214,7 @@ describe("regenerateRequest", () => {
     mockPrisma.generationRequest.findUnique
       .mockResolvedValueOnce({
         id: "req_01",
-        teacherId: "teacher_01",
+        ownerAccountId: "teacher_01",
         status: "READY",
         constraints: validConstraints,
         materialIds: [],

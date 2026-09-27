@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveSession } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/logger";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { ok, fail, AppError } from "@/lib/errors";
 import {
   deleteMaterialFolder,
@@ -36,7 +37,7 @@ export async function DELETE(
         status: 401,
       });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), {
         status: 403,
       });
@@ -45,7 +46,9 @@ export async function DELETE(
     await deleteMaterialFolder(id, session.id);
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "material.folder.delete",
       entityType: "materialFolder",
       entityId: id,
@@ -81,7 +84,7 @@ export async function PATCH(
         status: 401,
       });
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), {
         status: 403,
       });
@@ -102,7 +105,7 @@ export async function PATCH(
     let folder = hasParentId
       ? await moveMaterialFolder({
           folderId: id,
-          teacherId: session.id,
+          ownerAccountId: session.id,
           parentId: parsed.data.parentId ?? null,
         })
       : null;
@@ -110,7 +113,7 @@ export async function PATCH(
     if (hasName && parsed.data.name) {
       folder = await renameMaterialFolder({
         folderId: id,
-        teacherId: session.id,
+        ownerAccountId: session.id,
         name: parsed.data.name,
       });
     }
@@ -130,7 +133,9 @@ export async function PATCH(
           : "material.folder.rename";
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action,
       entityType: "materialFolder",
       entityId: id,

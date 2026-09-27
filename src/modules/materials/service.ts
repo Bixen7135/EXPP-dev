@@ -1,4 +1,4 @@
-import fs from "fs/promises";
+﻿import fs from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/db/prisma";
 import { extractText } from "./extractor";
@@ -35,7 +35,7 @@ const FALLBACK_MIME_BY_EXTENSION: Record<string, string> = {
 
 interface MaterialFolderRow {
   id: string;
-  teacherId: string;
+  ownerAccountId: string;
   name: string;
   parentId: string | null;
   createdAt: Date;
@@ -44,7 +44,7 @@ interface MaterialFolderRow {
 
 interface MaterialRow {
   id: string;
-  teacherId: string;
+  ownerAccountId: string;
   title: string;
   originalFilename: string;
   mimeType: string;
@@ -63,8 +63,8 @@ function storageRoot(): string {
   return path.join(process.cwd(), "storage", "materials");
 }
 
-function storagePathFor(teacherId: string, materialId: string, filename: string): string {
-  return path.join(storageRoot(), teacherId, materialId, filename);
+function storagePathFor(ownerAccountId: string, materialId: string, filename: string): string {
+  return path.join(storageRoot(), ownerAccountId, materialId, filename);
 }
 
 /** Sanitise a filename to prevent path traversal. */
@@ -139,15 +139,15 @@ function buildFolderPathMap(rows: MaterialFolderRow[]): Map<string, string> {
   return memo;
 }
 
-async function listMaterialFolderRows(teacherId: string): Promise<MaterialFolderRow[]> {
+async function listMaterialFolderRows(ownerAccountId: string): Promise<MaterialFolderRow[]> {
   const rows = await prisma.materialFolder.findMany({
-    where: { teacherId },
+    where: { ownerAccountId },
     orderBy: [{ name: "asc" }, { createdAt: "asc" }],
   });
 
   return rows.map((row) => ({
     id: row.id,
-    teacherId: row.teacherId,
+    ownerAccountId: row.ownerAccountId,
     name: row.name,
     parentId: row.parentId,
     createdAt: row.createdAt,
@@ -157,7 +157,7 @@ async function listMaterialFolderRows(teacherId: string): Promise<MaterialFolder
 
 async function assertFolderOwnership(
   folderId: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<MaterialFolderRow> {
   const folder = await prisma.materialFolder.findUnique({ where: { id: folderId } });
 
@@ -165,13 +165,13 @@ async function assertFolderOwnership(
     throw new NotFoundError("Folder not found");
   }
 
-  if (folder.teacherId !== teacherId) {
+  if (folder.ownerAccountId !== ownerAccountId) {
     throw new ForbiddenError();
   }
 
   return {
     id: folder.id,
-    teacherId: folder.teacherId,
+    ownerAccountId: folder.ownerAccountId,
     name: folder.name,
     parentId: folder.parentId,
     createdAt: folder.createdAt,
@@ -205,15 +205,15 @@ export function validateFileSize(mimeType: string, size: number): void {
 }
 
 export async function listMaterialFolders(
-  teacherId: string
+  ownerAccountId: string
 ): Promise<MaterialFolderSummary[]> {
-  const rows = await listMaterialFolderRows(teacherId);
+  const rows = await listMaterialFolderRows(ownerAccountId);
   const pathMap = buildFolderPathMap(rows);
 
   return rows
     .map((row) => ({
       id: row.id,
-      teacherId: row.teacherId,
+      ownerAccountId: row.ownerAccountId,
       name: row.name,
       parentId: row.parentId,
       createdAt: row.createdAt,
@@ -224,21 +224,21 @@ export async function listMaterialFolders(
 }
 
 export async function createMaterialFolder(opts: {
-  teacherId: string;
+  ownerAccountId: string;
   name: string;
   parentId?: string | null;
 }): Promise<MaterialFolderSummary> {
-  const teacherId = opts.teacherId;
+  const ownerAccountId = opts.ownerAccountId;
   const normalizedName = normalizeFolderName(opts.name);
   const parentId = opts.parentId ?? null;
 
   if (parentId) {
-    await assertFolderOwnership(parentId, teacherId);
+    await assertFolderOwnership(parentId, ownerAccountId);
   }
 
   const duplicate = await prisma.materialFolder.findFirst({
     where: {
-      teacherId,
+      ownerAccountId,
       parentId,
       name: { equals: normalizedName, mode: "insensitive" },
     },
@@ -251,18 +251,18 @@ export async function createMaterialFolder(opts: {
 
   const created = await prisma.materialFolder.create({
     data: {
-      teacherId,
+      ownerAccountId,
       name: normalizedName,
       parentId,
     },
   });
 
-  const folders = await listMaterialFolderRows(teacherId);
+  const folders = await listMaterialFolderRows(ownerAccountId);
   const pathMap = buildFolderPathMap(folders);
 
   return {
     id: created.id,
-    teacherId: created.teacherId,
+    ownerAccountId: created.ownerAccountId,
     name: created.name,
     parentId: created.parentId,
     createdAt: created.createdAt,
@@ -273,26 +273,26 @@ export async function createMaterialFolder(opts: {
 
 export async function deleteMaterialFolder(
   folderId: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<void> {
-  await assertFolderOwnership(folderId, teacherId);
+  await assertFolderOwnership(folderId, ownerAccountId);
   await prisma.materialFolder.delete({ where: { id: folderId } });
 }
 
 export async function renameMaterialFolder(opts: {
   folderId: string;
-  teacherId: string;
+  ownerAccountId: string;
   name: string;
 }): Promise<MaterialFolderSummary> {
-  const { folderId, teacherId, name } = opts;
-  const folder = await assertFolderOwnership(folderId, teacherId);
+  const { folderId, ownerAccountId, name } = opts;
+  const folder = await assertFolderOwnership(folderId, ownerAccountId);
   const normalizedName = normalizeFolderName(name);
 
   const currentName = folder.name.trim();
   if (currentName.toLowerCase() !== normalizedName.toLowerCase()) {
     const duplicate = await prisma.materialFolder.findFirst({
       where: {
-        teacherId,
+        ownerAccountId,
         parentId: folder.parentId,
         name: { equals: normalizedName, mode: "insensitive" },
         NOT: { id: folderId },
@@ -310,12 +310,12 @@ export async function renameMaterialFolder(opts: {
     data: { name: normalizedName },
   });
 
-  const folders = await listMaterialFolderRows(teacherId);
+  const folders = await listMaterialFolderRows(ownerAccountId);
   const pathMap = buildFolderPathMap(folders);
 
   return {
     id: updated.id,
-    teacherId: updated.teacherId,
+    ownerAccountId: updated.ownerAccountId,
     name: updated.name,
     parentId: updated.parentId,
     createdAt: updated.createdAt,
@@ -326,18 +326,18 @@ export async function renameMaterialFolder(opts: {
 
 export async function moveMaterialFolder(opts: {
   folderId: string;
-  teacherId: string;
+  ownerAccountId: string;
   parentId: string | null;
 }): Promise<MaterialFolderSummary> {
-  const { folderId, teacherId, parentId } = opts;
-  const folder = await assertFolderOwnership(folderId, teacherId);
+  const { folderId, ownerAccountId, parentId } = opts;
+  const folder = await assertFolderOwnership(folderId, ownerAccountId);
 
   if ((folder.parentId ?? null) === parentId) {
-    const folders = await listMaterialFolderRows(teacherId);
+    const folders = await listMaterialFolderRows(ownerAccountId);
     const pathMap = buildFolderPathMap(folders);
     return {
       id: folder.id,
-      teacherId: folder.teacherId,
+      ownerAccountId: folder.ownerAccountId,
       name: folder.name,
       parentId: folder.parentId,
       createdAt: folder.createdAt,
@@ -351,10 +351,10 @@ export async function moveMaterialFolder(opts: {
   }
 
   if (parentId) {
-    await assertFolderOwnership(parentId, teacherId);
+    await assertFolderOwnership(parentId, ownerAccountId);
   }
 
-  const allFolders = await listMaterialFolderRows(teacherId);
+  const allFolders = await listMaterialFolderRows(ownerAccountId);
   const byId = new Map(allFolders.map((row) => [row.id, row]));
 
   let cursor = parentId;
@@ -367,7 +367,7 @@ export async function moveMaterialFolder(opts: {
 
   const duplicate = await prisma.materialFolder.findFirst({
     where: {
-      teacherId,
+      ownerAccountId,
       parentId,
       name: { equals: folder.name, mode: "insensitive" },
       NOT: { id: folderId },
@@ -384,12 +384,12 @@ export async function moveMaterialFolder(opts: {
     data: { parentId },
   });
 
-  const refreshedFolders = await listMaterialFolderRows(teacherId);
+  const refreshedFolders = await listMaterialFolderRows(ownerAccountId);
   const pathMap = buildFolderPathMap(refreshedFolders);
 
   return {
     id: updated.id,
-    teacherId: updated.teacherId,
+    ownerAccountId: updated.ownerAccountId,
     name: updated.name,
     parentId: updated.parentId,
     createdAt: updated.createdAt,
@@ -399,7 +399,7 @@ export async function moveMaterialFolder(opts: {
 }
 
 export async function uploadMaterial(opts: {
-  teacherId: string;
+  ownerAccountId: string;
   title: string;
   originalFilename: string;
   mimeType: string;
@@ -408,7 +408,7 @@ export async function uploadMaterial(opts: {
   tags?: TagInput[];
 }): Promise<MaterialDetail> {
   const {
-    teacherId,
+    ownerAccountId,
     title,
     originalFilename,
     mimeType,
@@ -423,7 +423,7 @@ export async function uploadMaterial(opts: {
 
   let targetFolderId: string | null = null;
   if (folderId) {
-    const folder = await assertFolderOwnership(folderId, teacherId);
+    const folder = await assertFolderOwnership(folderId, ownerAccountId);
     targetFolderId = folder.id;
   }
 
@@ -432,7 +432,7 @@ export async function uploadMaterial(opts: {
   // Create DB record first to get the ID for the storage path
   const material = await prisma.material.create({
     data: {
-      teacherId,
+      ownerAccountId,
       folderId: targetFolderId,
       title,
       originalFilename: safeFilename,
@@ -447,7 +447,7 @@ export async function uploadMaterial(opts: {
     include: { tags: true },
   });
 
-  const filePath = storagePathFor(teacherId, material.id, safeFilename);
+  const filePath = storagePathFor(ownerAccountId, material.id, safeFilename);
 
   try {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -468,7 +468,7 @@ export async function uploadMaterial(opts: {
 
     let folderPath: string | null = null;
     if (targetFolderId) {
-      const folders = await listMaterialFolderRows(teacherId);
+      const folders = await listMaterialFolderRows(ownerAccountId);
       const pathMap = buildFolderPathMap(folders);
       folderPath = pathMap.get(targetFolderId) ?? null;
     }
@@ -484,14 +484,14 @@ export async function uploadMaterial(opts: {
   }
 }
 
-export async function listMaterials(teacherId: string): Promise<MaterialSummary[]> {
+export async function listMaterials(ownerAccountId: string): Promise<MaterialSummary[]> {
   const [rows, folders] = await Promise.all([
     prisma.material.findMany({
-      where: { teacherId },
+      where: { ownerAccountId },
       orderBy: { updatedAt: "desc" },
       include: { tags: true },
     }),
-    listMaterialFolderRows(teacherId),
+    listMaterialFolderRows(ownerAccountId),
   ]);
 
   const pathMap = buildFolderPathMap(folders);
@@ -501,7 +501,7 @@ export async function listMaterials(teacherId: string): Promise<MaterialSummary[
 
 export async function getMaterial(
   id: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<MaterialDetail> {
   const material = await prisma.material.findUnique({
     where: { id },
@@ -509,9 +509,9 @@ export async function getMaterial(
   });
 
   if (!material) throw new NotFoundError("Material not found");
-  if (material.teacherId !== teacherId) throw new ForbiddenError();
+  if (material.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
 
-  const folders = await listMaterialFolderRows(teacherId);
+  const folders = await listMaterialFolderRows(ownerAccountId);
   const pathMap = buildFolderPathMap(folders);
 
   return toDetail(
@@ -522,11 +522,11 @@ export async function getMaterial(
 
 export async function deleteMaterial(
   id: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<void> {
   const material = await prisma.material.findUnique({ where: { id } });
   if (!material) throw new NotFoundError("Material not found");
-  if (material.teacherId !== teacherId) throw new ForbiddenError();
+  if (material.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
 
   // Delete file from disk (best-effort)
   if (material.storagePath) {
@@ -544,10 +544,10 @@ export async function deleteMaterial(
 
 export async function moveMaterialToFolder(opts: {
   materialId: string;
-  teacherId: string;
+  ownerAccountId: string;
   folderId: string | null;
 }): Promise<MaterialDetail> {
-  const { materialId, teacherId, folderId } = opts;
+  const { materialId, ownerAccountId, folderId } = opts;
 
   const material = await prisma.material.findUnique({
     where: { id: materialId },
@@ -555,11 +555,11 @@ export async function moveMaterialToFolder(opts: {
   });
 
   if (!material) throw new NotFoundError("Material not found");
-  if (material.teacherId !== teacherId) throw new ForbiddenError();
+  if (material.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
 
   let targetFolderId: string | null = null;
   if (folderId) {
-    const folder = await assertFolderOwnership(folderId, teacherId);
+    const folder = await assertFolderOwnership(folderId, ownerAccountId);
     targetFolderId = folder.id;
   }
 
@@ -569,7 +569,7 @@ export async function moveMaterialToFolder(opts: {
     include: { tags: true },
   });
 
-  const folders = await listMaterialFolderRows(teacherId);
+  const folders = await listMaterialFolderRows(ownerAccountId);
   const pathMap = buildFolderPathMap(folders);
 
   return toDetail(
@@ -601,3 +601,4 @@ function toDetail(m: MaterialRow, folderPath: string | null): MaterialDetail {
     storagePath: m.storagePath,
   };
 }
+

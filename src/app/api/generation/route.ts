@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/logger";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import {
   ok,
   fail,
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         { status: 401 }
       );
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), {
         status: 403,
       });
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 401 }
       );
     }
-    if (session.role !== "TEACHER" && session.role !== "ADMIN") {
+    if (!canAccessTeacherWorkspace(session)) {
       throw new ForbiddenError();
     }
 
@@ -70,13 +71,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const result = await createGenerationRequest({
-      teacherId: session.id,
+      ownerAccountId: session.id,
       constraints,
       materialIds,
     });
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "generation.request.created",
       entityType: "generation_request",
       entityId: result.id,
@@ -99,3 +102,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+

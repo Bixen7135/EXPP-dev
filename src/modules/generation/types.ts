@@ -1,4 +1,4 @@
-export type DifficultyLevel = "EASY" | "MEDIUM" | "HARD";
+﻿export type DifficultyLevel = "EASY" | "MEDIUM" | "HARD";
 export type GenerationFormat = "SINGLE_ASSIGNMENT" | "WORKSHEET";
 export type GenerationStatus = "PENDING" | "PLANNING" | "GENERATING" | "READY" | "ERROR";
 
@@ -46,7 +46,7 @@ export interface GenerationPlanOutline {
 
 export interface GenerationRequestSummary {
   id: string;
-  teacherId: string;
+  ownerAccountId: string;
   status: GenerationStatus;
   constraints: GenerationConstraints;
   materialIds: string[];
@@ -64,3 +64,4 @@ export interface GenerationRequestDetail extends GenerationRequestSummary {
     createdAt: Date;
   } | null;
 }
+

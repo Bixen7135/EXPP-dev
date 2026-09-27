@@ -25,7 +25,7 @@ export interface StudentAssignmentContent {
 export interface AttemptDetail {
   id: string;
   recipientId: string;
-  studentId: string;
+  learnerAccountId: string;
   status: AttemptStatus;
   answers: AttemptAnswer[];
   submittedAt: Date | null;

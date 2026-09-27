@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// ── Mock Prisma ────────────────────────────────────────────────────────────
+// â”€â”€ Mock Prisma â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
@@ -53,7 +53,7 @@ const fakeContent = {
 
 const fakeAttempt = {
   id: "att_01",
-  studentId: "student_01",
+  learnerAccountId: "student_01",
   answers: [
     { itemOrder: 1, text: "A" },  // correct
     { itemOrder: 2, text: "Berlin" }, // incorrect
@@ -61,8 +61,7 @@ const fakeAttempt = {
   submittedAt: new Date(),
   assessment: null,
   recipient: {
-    distribution: {
-      teacherId: "teacher_01",
+    distribution: { creatorAccountId: "teacher_01",
       version: { content: fakeContent },
     },
   },
@@ -71,7 +70,7 @@ const fakeAttempt = {
 const fakeAssessment = {
   id: "asmnt_01",
   attemptId: "att_01",
-  teacherId: "teacher_01",
+  reviewerAccountId: "teacher_01",
   autoCheckResult: { items: [], autoScore: 1, autoMaxScore: 2 },
   autoCheckStatus: "NOT_STARTED",
   aiRecommendation: null,
@@ -89,7 +88,7 @@ const fakeAssessment = {
   updatedAt: new Date(),
 };
 
-// ── getOrCreateAssessment ─────────────────────────────────────────────────
+// â”€â”€ getOrCreateAssessment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("getOrCreateAssessment", () => {
   it("creates assessment with auto-check when none exists", async () => {
@@ -124,14 +123,14 @@ describe("getOrCreateAssessment", () => {
     mockPrisma.attempt.findUnique.mockResolvedValue({
       ...fakeAttempt,
       recipient: {
-        distribution: { teacherId: "other_teacher" },
+        distribution: { creatorAccountId: "other_teacher" },
       },
     });
     await expect(getOrCreateAssessment("att_01", "teacher_01")).rejects.toThrow(ForbiddenError);
   });
 });
 
-// ── getAssessmentForTeacher ───────────────────────────────────────────────
+// â”€â”€ getAssessmentForTeacher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("getAssessmentForTeacher", () => {
   it("returns assessment for the owning teacher", async () => {
@@ -151,7 +150,7 @@ describe("getAssessmentForTeacher", () => {
   });
 });
 
-// ── reviewAssessment ──────────────────────────────────────────────────────
+// â”€â”€ reviewAssessment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("reviewAssessment", () => {
   const reviewed = { ...fakeAssessment, manualGrade: 8, maxGrade: 10, status: "REVIEWED", reviewedAt: new Date() };
@@ -198,7 +197,7 @@ describe("reviewAssessment", () => {
   });
 });
 
-// ── publishAssessment ─────────────────────────────────────────────────────
+// â”€â”€ publishAssessment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("publishAssessment", () => {
   it("transitions REVIEWED assessment to PUBLISHED", async () => {
@@ -243,7 +242,7 @@ describe("publishAssessment", () => {
   });
 });
 
-// ── getStudentResult ──────────────────────────────────────────────────────
+// â”€â”€ getStudentResult â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("getStudentResult", () => {
   const publishedAssessment = {
@@ -257,7 +256,7 @@ describe("getStudentResult", () => {
 
   it("returns published result for the owning student", async () => {
     mockPrisma.attempt.findUnique.mockResolvedValue({
-      studentId: "student_01",
+      learnerAccountId: "student_01",
       assessment: publishedAssessment,
     });
 
@@ -269,7 +268,7 @@ describe("getStudentResult", () => {
 
   it("throws NotFoundError when result is not yet published", async () => {
     mockPrisma.attempt.findUnique.mockResolvedValue({
-      studentId: "student_01",
+      learnerAccountId: "student_01",
       assessment: fakeAssessment, // AUTO_CHECKED, not PUBLISHED
     });
     await expect(getStudentResult("att_01", "student_01")).rejects.toThrow(NotFoundError);
@@ -277,7 +276,7 @@ describe("getStudentResult", () => {
 
   it("throws NotFoundError when no assessment exists", async () => {
     mockPrisma.attempt.findUnique.mockResolvedValue({
-      studentId: "student_01",
+      learnerAccountId: "student_01",
       assessment: null,
     });
     await expect(getStudentResult("att_01", "student_01")).rejects.toThrow(NotFoundError);
@@ -285,7 +284,7 @@ describe("getStudentResult", () => {
 
   it("throws ForbiddenError for wrong student", async () => {
     mockPrisma.attempt.findUnique.mockResolvedValue({
-      studentId: "student_01",
+      learnerAccountId: "student_01",
       assessment: publishedAssessment,
     });
     await expect(getStudentResult("att_01", "other_student")).rejects.toThrow(ForbiddenError);

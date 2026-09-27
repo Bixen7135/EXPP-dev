@@ -6,6 +6,7 @@ import type {
   CreateDistributionOpts,
   DistributionDetail,
   DistributionSummary,
+  RecipientSourceInput,
   RecipientSummary,
   StudentAssignmentSummary,
 } from "./types";
@@ -18,29 +19,29 @@ export async function createDistribution(
   const {
     assignmentId,
     versionId,
-    teacherId,
+    creatorUserId,
     deadline,
     distributionStatus,
     isGraded,
     aiHelpMode,
-    recipientStudentIds,
+    recipientSources = [],
+    recipientUserIds = [],
+    includeUserIds = [],
+    excludeUserIds = [],
   } = opts;
 
-  // Verify assignment belongs to teacher and is in a distributable state
   const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId } });
   if (!assignment) throw new NotFoundError("Assignment not found");
-  if (assignment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assignment.ownerAccountId !== creatorUserId) throw new ForbiddenError();
   if (assignment.status !== "PUBLISHABLE" && assignment.status !== "ASSIGNED") {
     throw new ValidationError("Only PUBLISHABLE or ASSIGNED assignments can be distributed");
   }
 
-  // Verify the version belongs to this assignment
   const version = await prisma.assignmentVersion.findUnique({ where: { id: versionId } });
   if (!version || version.assignmentId !== assignmentId) {
     throw new NotFoundError("Version not found on this assignment");
   }
 
-  // Validate AI mode for mandatory graded assignments
   const modeCheck = validateDistributionMode(
     aiHelpMode,
     distributionStatus === "MANDATORY",
@@ -50,20 +51,26 @@ export async function createDistribution(
     throw new ValidationError(modeCheck.reason!);
   }
 
-  // Verify all recipient students exist and have STUDENT role
-  if (recipientStudentIds.length === 0) {
-    throw new ValidationError("At least one recipient is required");
+  const resolvedRecipientUserIds = await resolveRecipientUserIds({
+    recipientSources,
+    recipientUserIds,
+    includeUserIds,
+    excludeUserIds,
+  });
+
+  if (resolvedRecipientUserIds.length === 0) {
+    throw new ValidationError("At least one recipient is required after source resolution");
   }
-  const students = await prisma.user.findMany({
-    where: { id: { in: recipientStudentIds }, role: "STUDENT" },
+
+  const users = await prisma.account.findMany({
+    where: { id: { in: resolvedRecipientUserIds }, isActive: true },
     select: { id: true },
   });
-  if (students.length !== recipientStudentIds.length) {
-    throw new ValidationError("One or more recipient IDs are invalid or not students");
+  if (users.length !== resolvedRecipientUserIds.length) {
+    throw new ValidationError("One or more recipient user IDs are invalid or inactive");
   }
 
   const distribution = await prisma.$transaction(async (tx) => {
-    // Transition assignment to ASSIGNED if it's still PUBLISHABLE
     if (assignment.status === "PUBLISHABLE") {
       await tx.assignment.update({
         where: { id: assignmentId },
@@ -75,17 +82,37 @@ export async function createDistribution(
       data: {
         assignmentId,
         versionId,
-        teacherId,
+        creatorAccountId: creatorUserId,
+        organizationId: assignment.organizationId,
+        institutionId: assignment.institutionId,
         deadline: deadline ?? null,
         status: distributionStatus,
         isGraded,
         aiHelpMode,
+        recipientSources: {
+          create: recipientSources.map((source) => ({
+            sourceType: source.sourceType,
+            sourceRefId: source.sourceRefId ?? null,
+          })),
+        },
         recipients: {
-          create: recipientStudentIds.map((studentId) => ({ studentId })),
+          create: resolvedRecipientUserIds.map((recipientUserId) => ({
+            recipientAccountId: recipientUserId,
+            snapshotContext: {
+              resolvedAt: new Date().toISOString(),
+              resolver: "distribution.service",
+            },
+          })),
         },
       },
       include: {
-        recipients: true,
+        recipients: {
+          include: {
+            recipientAccount: {
+              include: { user: { select: { email: true } } },
+            },
+          },
+        },
         assignment: { select: { title: true } },
       },
     });
@@ -96,53 +123,77 @@ export async function createDistribution(
   return toDetail(distribution, distribution.recipients, distribution.assignment.title);
 }
 
-// ── Read (Teacher) ─────────────────────────────────────────────────────────
+// ── Read (Creator) ────────────────────────────────────────────────────────
 
-export async function listDistributions(teacherId: string): Promise<DistributionSummary[]> {
+export async function listDistributions(
+  creatorUserId: string
+): Promise<DistributionSummary[]> {
   const rows = await prisma.assignmentDistribution.findMany({
-    where: { teacherId },
+    where: { creatorAccountId: creatorUserId },
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toSummary);
 }
 
-export async function listAssignableStudents(): Promise<AssignableStudentSummary[]> {
-  return prisma.user.findMany({
-    where: { role: "STUDENT", isActive: true },
-    select: { id: true, name: true, email: true },
-    orderBy: [{ name: "asc" }, { email: "asc" }],
+export async function listAssignableStudents(
+  organizationId?: string | null
+): Promise<AssignableStudentSummary[]> {
+  const accounts = await prisma.account.findMany({
+    where: {
+      isActive: true,
+      ...(organizationId ? { organizationId } : {}),
+    },
+    include: {
+      user: { select: { email: true } },
+    },
+    orderBy: [{ displayName: "asc" }, { createdAt: "asc" }],
   });
+
+  return accounts.map((account) => ({
+    id: account.id,
+    name: account.displayName,
+    email: account.user.email,
+    domain: account.domain,
+    organizationId: account.organizationId,
+  }));
 }
 
 export async function getDistribution(
   id: string,
-  teacherId: string
+  creatorUserId: string
 ): Promise<DistributionDetail> {
   const row = await prisma.assignmentDistribution.findUnique({
     where: { id },
     include: {
-      recipients: { orderBy: { createdAt: "asc" } },
+      recipients: {
+        include: {
+          recipientAccount: {
+            include: { user: { select: { email: true } } },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
       assignment: { select: { title: true } },
     },
   });
   if (!row) throw new NotFoundError("Distribution not found");
-  if (row.teacherId !== teacherId) throw new ForbiddenError();
+  if (row.creatorAccountId !== creatorUserId) throw new ForbiddenError();
   return toDetail(row, row.recipients, row.assignment.title);
 }
 
-// ── Read (Student) ─────────────────────────────────────────────────────────
+// ── Read (Recipient) ───────────────────────────────────────────────────────
 
 export async function listStudentAssignments(
-  studentId: string
+  recipientUserId: string
 ): Promise<StudentAssignmentSummary[]> {
   const recipients = await prisma.assignmentRecipient.findMany({
-    where: { studentId },
+    where: { recipientAccountId: recipientUserId },
     orderBy: { createdAt: "desc" },
     include: {
       distribution: {
         include: {
           assignment: { select: { title: true } },
-          teacher: { select: { name: true } },
+          creatorAccount: { select: { displayName: true } },
         },
       },
       attempt: { select: { status: true } },
@@ -159,17 +210,66 @@ export async function listStudentAssignments(
     aiHelpMode: r.distribution.aiHelpMode as "NO_HELP" | "CLARIFICATION" | "GUIDED" | "POST_ASSESSMENT",
     recipientStatus: r.status as "PENDING" | "ACTIVE" | "SUBMITTED",
     attemptStatus: r.attempt ? (r.attempt.status as "DRAFT" | "SUBMITTED") : null,
-    teacherName: r.distribution.teacher.name,
+    creatorName: r.distribution.creatorAccount.displayName,
   }));
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+async function resolveRecipientUserIds(opts: {
+  recipientSources: RecipientSourceInput[];
+  recipientUserIds: string[];
+  includeUserIds: string[];
+  excludeUserIds: string[];
+}): Promise<string[]> {
+  const selected = new Set<string>(opts.recipientUserIds);
+
+  for (const source of opts.recipientSources) {
+    if (source.sourceType === "USER" && source.sourceRefId) {
+      selected.add(source.sourceRefId);
+      continue;
+    }
+
+    if (!source.sourceRefId) continue;
+
+    if (source.sourceType === "FORMAL_ENTITY") {
+      const members = await prisma.formalEntityMember.findMany({
+        where: { formalEntityId: source.sourceRefId },
+        select: { accountId: true },
+      });
+      for (const member of members) selected.add(member.accountId);
+      continue;
+    }
+
+    if (source.sourceType === "TARGET_GROUP") {
+      const members = await prisma.targetGroupMember.findMany({
+        where: { targetGroupId: source.sourceRefId },
+        select: { accountId: true },
+      });
+      for (const member of members) selected.add(member.accountId);
+      continue;
+    }
+
+    if (source.sourceType === "PRACTICE_GROUP") {
+      const members = await prisma.practiceGroupMember.findMany({
+        where: { practiceGroupId: source.sourceRefId },
+        select: { accountId: true },
+      });
+      for (const member of members) selected.add(member.accountId);
+    }
+  }
+
+  for (const userId of opts.includeUserIds) selected.add(userId);
+  for (const userId of opts.excludeUserIds) selected.delete(userId);
+
+  return [...selected];
+}
+
 type DistRow = {
   id: string;
   assignmentId: string;
   versionId: string;
-  teacherId: string;
+  creatorAccountId: string;
   deadline: Date | null;
   status: string;
   isGraded: boolean;
@@ -180,9 +280,10 @@ type DistRow = {
 
 type RecipientRow = {
   id: string;
-  studentId: string;
+  recipientAccountId: string;
   status: string;
   createdAt: Date;
+  recipientAccount?: { displayName: string } | null;
 };
 
 function toSummary(row: DistRow): DistributionSummary {
@@ -190,7 +291,7 @@ function toSummary(row: DistRow): DistributionSummary {
     id: row.id,
     assignmentId: row.assignmentId,
     versionId: row.versionId,
-    teacherId: row.teacherId,
+    creatorUserId: row.creatorAccountId,
     deadline: row.deadline,
     status: row.status as "MANDATORY" | "PRACTICE",
     isGraded: row.isGraded,
@@ -203,7 +304,8 @@ function toSummary(row: DistRow): DistributionSummary {
 function toRecipientSummary(r: RecipientRow): RecipientSummary {
   return {
     id: r.id,
-    studentId: r.studentId,
+    recipientUserId: r.recipientAccountId,
+    recipientDisplayName: r.recipientAccount?.displayName ?? r.recipientAccountId,
     status: r.status as "PENDING" | "ACTIVE" | "SUBMITTED",
     createdAt: r.createdAt,
   };

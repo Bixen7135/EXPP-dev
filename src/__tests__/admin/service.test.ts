@@ -42,9 +42,9 @@ const mockPrisma = prisma as unknown as {
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
 
-const adminUser = { id: "admin_01", email: "admin@ex.com", name: "Admin", role: "ADMIN", isActive: true, createdAt: new Date() };
-const teacherUser = { id: "teacher_01", email: "teacher@ex.com", name: "Teacher", role: "TEACHER", isActive: true, createdAt: new Date() };
-const studentUser = { id: "student_01", email: "student@ex.com", name: "Student", role: "STUDENT", isActive: true, createdAt: new Date() };
+const adminUser = { id: "admin_01", email: "admin@ex.com", name: "Admin", isActive: true, createdAt: new Date(), _count: { accounts: 2 } };
+const teacherUser = { id: "teacher_01", email: "teacher@ex.com", name: "Teacher", isActive: true, createdAt: new Date(), _count: { accounts: 1 } };
+const studentUser = { id: "student_01", email: "student@ex.com", name: "Student", isActive: true, createdAt: new Date(), _count: { accounts: 1 } };
 
 // ── listUsers ──────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ describe("listUsers", () => {
 
     const result = await listUsers();
     expect(result).toHaveLength(3);
-    expect(result[0].role).toBe("ADMIN");
+    expect(result[0].accountCount).toBe(2);
   });
 });
 
@@ -80,7 +80,7 @@ describe("updateUserStatus", () => {
     expect(result.isActive).toBe(true);
   });
 
-  it("throws ValidationError when trying to modify own account", async () => {
+  it("throws ValidationError when trying to modify own user", async () => {
     await expect(
       updateUserStatus("admin_01", "admin_01", { isActive: false })
     ).rejects.toThrow(ValidationError);
@@ -93,23 +93,6 @@ describe("updateUserStatus", () => {
     ).rejects.toThrow(NotFoundError);
   });
 
-  it("throws ValidationError when demoting the last admin", async () => {
-    mockPrisma.user.findUnique.mockResolvedValue(adminUser); // target IS admin
-    mockPrisma.user.count.mockResolvedValue(1); // only 1 admin
-
-    await expect(
-      updateUserStatus("admin_01", "other_admin", { role: "TEACHER" })
-    ).rejects.toThrow(ValidationError);
-  });
-
-  it("allows demoting an admin when multiple admins exist", async () => {
-    mockPrisma.user.findUnique.mockResolvedValue(adminUser);
-    mockPrisma.user.count.mockResolvedValue(2); // 2 admins exist
-    mockPrisma.user.update.mockResolvedValue({ ...adminUser, role: "TEACHER" });
-
-    const result = await updateUserStatus("admin_01", "other_admin", { role: "TEACHER" });
-    expect(result.role).toBe("TEACHER");
-  });
 });
 
 // ── getAuditLog ────────────────────────────────────────────────────────────

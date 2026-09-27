@@ -1,4 +1,5 @@
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 import { redirect, notFound } from "next/navigation";
 import { getMaterial } from "@/modules/materials/service";
 import Link from "next/link";
@@ -18,7 +19,7 @@ export default async function MaterialDetailPage({
   const { id } = await params;
 
   const session = await resolveSession();
-  if (!session || (session.role !== "TEACHER" && session.role !== "ADMIN")) {
+  if (!session || !canAccessTeacherWorkspace(session)) {
     redirect("/login");
   }
 

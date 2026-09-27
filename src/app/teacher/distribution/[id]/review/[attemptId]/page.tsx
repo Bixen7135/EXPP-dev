@@ -62,7 +62,7 @@ export default async function ReviewAttemptPage({ params }: Props) {
 
       <div>
         <h1 className="text-2xl font-bold">{content.title}</h1>
-        <p className="text-sm text-gray-500 mt-1">Student: {attempt.studentId}</p>
+        <p className="text-sm text-gray-500 mt-1">Learner user: {attempt.learnerAccountId}</p>
         {attempt.submittedAt && (
           <p className="text-sm text-gray-400">
             Submitted {new Date(attempt.submittedAt).toLocaleString()}
@@ -117,5 +117,3 @@ export default async function ReviewAttemptPage({ params }: Props) {
     </main>
   );
 }
-
-

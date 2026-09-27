@@ -10,7 +10,7 @@ type Props = { params: Promise<{ id: string }> };
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
   PUBLISHABLE: "bg-green-100 text-green-800",
-  ASSIGNED: "bg-blue-100 text-blue-800",
+  ASSIGNED: "bg-[color:var(--color-blue-500)]/12 text-[color:var(--color-blue-200)]",
 };
 
 export default async function AssignmentEditPage({ params }: Props) {
@@ -42,7 +42,7 @@ export default async function AssignmentEditPage({ params }: Props) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <span
-            className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[assignment.status] ?? "bg-gray-100 text-gray-700"}`}
+            className={`px-3 py-1 rounded text-sm font-medium ${STATUS_COLORS[assignment.status] ?? "bg-gray-100 text-gray-700"}`}
           >
             {assignment.status}
           </span>

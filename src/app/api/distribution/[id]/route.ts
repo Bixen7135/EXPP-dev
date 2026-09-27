@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/auth/session";
 import { ok, fail } from "@/lib/errors";
 import { getDistribution } from "@/modules/distribution/service";
+import { canAccessTeacherWorkspace } from "@/lib/auth/authorization";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest, { params }: Params): Promise<NextRes
   const traceId = req.headers.get("x-trace-id") ?? "unknown";
   const session = await resolveSession();
   if (!session) return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), { status: 401 });
-  if (session.role !== "TEACHER" && session.role !== "ADMIN")
+  if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
   try {

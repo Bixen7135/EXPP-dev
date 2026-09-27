@@ -13,10 +13,10 @@ import type {
 // â”€â”€ Create â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function createAssignment(opts: {
-  teacherId: string;
+  ownerAccountId: string;
   generationResultId: string;
 }): Promise<AssignmentDetail> {
-  const { teacherId, generationResultId } = opts;
+  const { ownerAccountId, generationResultId } = opts;
 
   // Verify the generation result exists and belongs to this teacher
   const genResult = await prisma.generationResult.findUnique({
@@ -24,7 +24,7 @@ export async function createAssignment(opts: {
     include: { request: true },
   });
   if (!genResult) throw new NotFoundError("Generation result not found");
-  if (genResult.request.teacherId !== teacherId) throw new ForbiddenError();
+  if (genResult.request.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
 
   // Derive initial content from the generation result
   const content = normalizeAssignmentContent(genResult.content as unknown as AssignmentContent);
@@ -32,7 +32,7 @@ export async function createAssignment(opts: {
   const assignment = await prisma.$transaction(async (tx) => {
     const created = await tx.assignment.create({
       data: {
-        teacherId,
+        ownerAccountId,
         generationResultId,
         title: content.title,
         content: content as object,
@@ -46,7 +46,7 @@ export async function createAssignment(opts: {
         assignmentId: created.id,
         versionNumber: 1,
         content: content as object,
-        authorId: teacherId,
+        authorAccountId: ownerAccountId,
         changeDescription: "Initial version from generation",
       },
     });
@@ -70,10 +70,10 @@ export async function createAssignment(opts: {
 // â”€â”€ Read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listAssignments(
-  teacherId: string
+  ownerAccountId: string
 ): Promise<AssignmentSummary[]> {
   const rows = await prisma.assignment.findMany({
-    where: { teacherId },
+    where: { ownerAccountId },
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toSummary);
@@ -81,27 +81,27 @@ export async function listAssignments(
 
 export async function getAssignment(
   id: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<AssignmentDetail> {
   const row = await prisma.assignment.findUnique({
     where: { id },
     include: { versions: { orderBy: { versionNumber: "desc" } } },
   });
   if (!row) throw new NotFoundError("Assignment not found");
-  if (row.teacherId !== teacherId) throw new ForbiddenError();
+  if (row.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
   return toDetail(row, row.versions.map(toVersionSummary));
 }
 
 export async function getAssignmentVersion(
   assignmentId: string,
   versionId: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<AssignmentVersionDetail> {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
   });
   if (!assignment) throw new NotFoundError("Assignment not found");
-  if (assignment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assignment.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
 
   const version = await prisma.assignmentVersion.findUnique({
     where: { id: versionId },
@@ -112,7 +112,7 @@ export async function getAssignmentVersion(
   return {
     id: version.id,
     versionNumber: version.versionNumber,
-    authorId: version.authorId,
+    authorAccountId: version.authorAccountId,
     changeDescription: version.changeDescription,
     createdAt: version.createdAt,
     content: version.content as unknown as AssignmentContent,
@@ -123,14 +123,14 @@ export async function getAssignmentVersion(
 
 export async function updateAssignment(
   id: string,
-  teacherId: string,
+  ownerAccountId: string,
   content: AssignmentContent,
   changeDescription?: string
 ): Promise<AssignmentDetail> {
   const normalizedContent = normalizeAssignmentContent(content);
   const assignment = await prisma.assignment.findUnique({ where: { id } });
   if (!assignment) throw new NotFoundError("Assignment not found");
-  if (assignment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assignment.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
   if (assignment.status === "ASSIGNED")
     throw new ValidationError("Cannot edit an assigned assignment");
 
@@ -145,7 +145,7 @@ export async function updateAssignment(
         assignmentId: id,
         versionNumber: count + 1,
         content: normalizedContent as object,
-        authorId: teacherId,
+        authorAccountId: ownerAccountId,
         changeDescription: changeDescription ?? null,
       },
     });
@@ -176,13 +176,13 @@ export async function updateAssignment(
 export async function restoreVersion(
   assignmentId: string,
   versionId: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<AssignmentDetail> {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
   });
   if (!assignment) throw new NotFoundError("Assignment not found");
-  if (assignment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assignment.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
   if (assignment.status === "ASSIGNED")
     throw new ValidationError("Cannot restore a version on an assigned assignment");
 
@@ -204,7 +204,7 @@ export async function restoreVersion(
         assignmentId,
         versionNumber: count + 1,
         content: content as object,
-        authorId: teacherId,
+        authorAccountId: ownerAccountId,
         changeDescription: `Restored from version ${version.versionNumber}`,
       },
     });
@@ -232,14 +232,14 @@ export async function restoreVersion(
 
 export async function publishAssignment(
   id: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<AssignmentDetail> {
   const assignment = await prisma.assignment.findUnique({
     where: { id },
     include: { versions: { orderBy: { versionNumber: "desc" } } },
   });
   if (!assignment) throw new NotFoundError("Assignment not found");
-  if (assignment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assignment.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
   if (assignment.status === "ASSIGNED")
     throw new ValidationError("Assignment is already assigned");
   if (assignment.status === "PUBLISHABLE")
@@ -258,13 +258,13 @@ export async function publishAssignment(
 
 export async function deleteAssignment(
   id: string,
-  teacherId: string
+  ownerAccountId: string
 ): Promise<void> {
   const assignment = await prisma.assignment.findUnique({
     where: { id },
   });
   if (!assignment) throw new NotFoundError("Assignment not found");
-  if (assignment.teacherId !== teacherId) throw new ForbiddenError();
+  if (assignment.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
   if (assignment.status === "ASSIGNED")
     throw new ValidationError("Cannot delete an assigned assignment");
 
@@ -305,7 +305,7 @@ async function syncItems(
 
 type AssignmentRow = {
   id: string;
-  teacherId: string;
+  ownerAccountId: string;
   generationResultId: string | null;
   title: string;
   content: unknown;
@@ -318,7 +318,7 @@ type AssignmentRow = {
 type VersionRow = {
   id: string;
   versionNumber: number;
-  authorId: string;
+  authorAccountId: string;
   changeDescription: string | null;
   createdAt: Date;
 };
@@ -326,7 +326,7 @@ type VersionRow = {
 function toSummary(row: AssignmentRow): AssignmentSummary {
   return {
     id: row.id,
-    teacherId: row.teacherId,
+    ownerAccountId: row.ownerAccountId,
     generationResultId: row.generationResultId,
     title: row.title,
     status: row.status as AssignmentStatus,
@@ -340,7 +340,7 @@ function toVersionSummary(v: VersionRow): AssignmentVersionSummary {
   return {
     id: v.id,
     versionNumber: v.versionNumber,
-    authorId: v.authorId,
+    authorAccountId: v.authorAccountId,
     changeDescription: v.changeDescription,
     createdAt: v.createdAt,
   };
@@ -431,4 +431,5 @@ function normalizeRubricCriteria(
     weight: Number((criterion.weight * scale).toFixed(2)),
   }));
 }
+
 

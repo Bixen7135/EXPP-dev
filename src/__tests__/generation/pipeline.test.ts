@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// ── Mock dependencies ──────────────────────────────────────────────────────
+// â”€â”€ Mock dependencies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
@@ -76,12 +76,12 @@ describe("runGenerationPipeline", () => {
     mockPrisma.generationResult.upsert.mockResolvedValue({});
   });
 
-  it("transitions through PLANNING → GENERATING → READY", async () => {
+  it("transitions through PLANNING â†’ GENERATING â†’ READY", async () => {
     await runGenerationPipeline("req_01");
 
     const updateCalls = mockPrisma.generationRequest.update.mock.calls;
     const statuses = updateCalls.map(
-      (c: [{ where: unknown; data: { status: string } }]) => c[0].data.status
+      (c) => (c[0] as { data: { status: string } }).data.status
     );
     expect(statuses).toContain("PLANNING");
     expect(statuses).toContain("GENERATING");
@@ -106,14 +106,14 @@ describe("runGenerationPipeline", () => {
       create: { content: unknown; format: string };
     };
     expect(call.create.content).toBeTruthy();
-    // Result has no "published" or assignment status — only the generation status
-    const finalUpdate = mockPrisma.generationRequest.update.mock.calls.at(-1)[0] as {
+    // Result has no "published" or assignment status â€” only the generation status
+    const finalUpdate = mockPrisma.generationRequest.update.mock.calls.at(-1)![0] as {
       data: { status: string };
     };
     expect(finalUpdate.data.status).toBe("READY");
     // Ensure there's no call that sets status to something like "PUBLISHED"
     const allStatuses = mockPrisma.generationRequest.update.mock.calls.map(
-      (c: [{ data: { status: string } }]) => c[0].data.status
+      (c) => (c[0] as { data: { status: string } }).data.status
     );
     expect(allStatuses).not.toContain("PUBLISHED");
     expect(allStatuses).not.toContain("ASSIGNED");
@@ -128,7 +128,7 @@ describe("runGenerationPipeline", () => {
     await expect(runGenerationPipeline("req_01")).rejects.toThrow("AI unavailable");
 
     const statuses = mockPrisma.generationRequest.update.mock.calls.map(
-      (c: [{ data: { status: string } }]) => c[0].data.status
+      (c) => (c[0] as { data: { status: string } }).data.status
     );
     expect(statuses).toContain("ERROR");
   });

@@ -6,7 +6,7 @@ import { AI_HELP_SYSTEM_PROMPTS, type AiHelpMode } from "./mode-definitions";
 
 export interface AiHelpRequest {
   attemptId: string;
-  studentId: string;
+  learnerAccountId: string;
   mode: AiHelpMode;
   question: string;
   assignmentContext: string;
@@ -35,7 +35,7 @@ export async function requestAiHelp(opts: AiHelpRequest): Promise<AiHelpResponse
     const helpRequest = await prisma.helpRequest.create({
       data: {
         attemptId: opts.attemptId,
-        studentId: opts.studentId,
+        learnerAccountId: opts.learnerAccountId,
         mode: opts.mode,
         requestContent: opts.question,
         status: "BLOCKED",
@@ -45,7 +45,7 @@ export async function requestAiHelp(opts: AiHelpRequest): Promise<AiHelpResponse
     });
 
     await auditLog({
-      userId: opts.studentId,
+      actorAccountId: opts.learnerAccountId,
       action: "ai_help.blocked",
       entityType: "HelpRequest",
       entityId: helpRequest.id,
@@ -80,10 +80,10 @@ export async function requestAiHelp(opts: AiHelpRequest): Promise<AiHelpResponse
   });
 
   const helpRequest = await prisma.helpRequest.create({
-    data: {
-      attemptId: opts.attemptId,
-      studentId: opts.studentId,
-      mode: opts.mode,
+      data: {
+        attemptId: opts.attemptId,
+        learnerAccountId: opts.learnerAccountId,
+        mode: opts.mode,
       requestContent: opts.question,
       responseContent: result.text,
       status: "ALLOWED",
@@ -92,7 +92,7 @@ export async function requestAiHelp(opts: AiHelpRequest): Promise<AiHelpResponse
   });
 
   await auditLog({
-    userId: opts.studentId,
+    actorAccountId: opts.learnerAccountId,
     action: "ai_help.allowed",
     entityType: "HelpRequest",
     entityId: helpRequest.id,
@@ -106,3 +106,4 @@ export async function requestAiHelp(opts: AiHelpRequest): Promise<AiHelpResponse
     helpRequestId: helpRequest.id,
   };
 }
+

@@ -87,12 +87,12 @@ const fakeContent = {
 const fakeGenResult = {
   id: "genres_01",
   content: fakeContent,
-  request: { teacherId: "teacher_01" },
+  request: { ownerAccountId: "teacher_01" },
 };
 
 const fakeAssignment = {
   id: "asgn_01",
-  teacherId: "teacher_01",
+  ownerAccountId: "teacher_01",
   generationResultId: "genres_01",
   title: fakeContent.title,
   content: fakeContent,
@@ -107,7 +107,7 @@ const fakeVersion = {
   assignmentId: "asgn_01",
   versionNumber: 1,
   content: fakeContent,
-  authorId: "teacher_01",
+  authorAccountId: "teacher_01",
   changeDescription: "Initial version from generation",
   createdAt: new Date(),
 };
@@ -130,7 +130,7 @@ describe("createAssignment", () => {
 
   it("creates assignment from generation result for the owning teacher", async () => {
     const result = await createAssignment({
-      teacherId: "teacher_01",
+      ownerAccountId: "teacher_01",
       generationResultId: "genres_01",
     });
 
@@ -145,7 +145,7 @@ describe("createAssignment", () => {
   it("throws NotFoundError when generation result does not exist", async () => {
     mockPrisma.generationResult.findUnique.mockResolvedValue(null);
     await expect(
-      createAssignment({ teacherId: "teacher_01", generationResultId: "missing" })
+      createAssignment({ ownerAccountId: "teacher_01", generationResultId: "missing" })
     ).rejects.toThrow(NotFoundError);
     expect(mockTx.assignment.create).not.toHaveBeenCalled();
   });
@@ -153,10 +153,10 @@ describe("createAssignment", () => {
   it("throws ForbiddenError when generation result belongs to a different teacher", async () => {
     mockPrisma.generationResult.findUnique.mockResolvedValue({
       ...fakeGenResult,
-      request: { teacherId: "other_teacher" },
+      request: { ownerAccountId: "other_teacher" },
     });
     await expect(
-      createAssignment({ teacherId: "teacher_01", generationResultId: "genres_01" })
+      createAssignment({ ownerAccountId: "teacher_01", generationResultId: "genres_01" })
     ).rejects.toThrow(ForbiddenError);
   });
 });
@@ -169,7 +169,7 @@ describe("listAssignments", () => {
     const result = await listAssignments("teacher_01");
     expect(result).toHaveLength(1);
     expect(mockPrisma.assignment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { teacherId: "teacher_01" } })
+      expect.objectContaining({ where: { ownerAccountId: "teacher_01" } })
     );
   });
 });

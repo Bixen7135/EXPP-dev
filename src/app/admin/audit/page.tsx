@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessAdminWorkspace } from "@/lib/auth/authorization";
 import { getAuditLog } from "@/modules/admin/service";
 
 type Props = {
@@ -16,7 +17,7 @@ type Props = {
 
 export default async function AdminAuditPage({ searchParams }: Props) {
   const session = await resolveSession();
-  if (!session || session.role !== "ADMIN") notFound();
+  if (!session || !canAccessAdminWorkspace(session)) notFound();
 
   const sp = await searchParams;
   const page = sp.page ? parseInt(sp.page, 10) : 1;
@@ -118,14 +119,14 @@ export default async function AdminAuditPage({ searchParams }: Props) {
                     {new Date(e.createdAt).toLocaleString()}
                   </td>
                   <td className="py-2 pr-4 text-gray-700">
-                    {e.userName ?? <span className="text-gray-400">—</span>}
+                    {e.userName ?? <span className="text-gray-400">ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â</span>}
                   </td>
                   <td className="py-2 pr-4 font-mono text-xs text-gray-900">{e.action}</td>
                   <td className="py-2 pr-4 text-gray-500 text-xs">
-                    {e.entityType ? `${e.entityType}:${e.entityId ?? "?"}` : "—"}
+                    {e.entityType ? `${e.entityType}:${e.entityId ?? "?"}` : "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
                   </td>
                   <td className="py-2 font-mono text-xs text-gray-400 truncate max-w-32" title={e.traceId}>
-                    {e.traceId.slice(0, 12)}…
+                    {e.traceId.slice(0, 12)}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦
                   </td>
                 </tr>
               ))}

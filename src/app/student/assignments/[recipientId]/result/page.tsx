@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { resolveSession } from "@/lib/auth/session";
+import { canAccessStudentWorkspace } from "@/lib/auth/authorization";
 import { getStudentResult } from "@/modules/assessment/service";
 import { prisma } from "@/lib/db/prisma";
 import { NotFoundError, ForbiddenError } from "@/lib/errors";
@@ -10,15 +11,15 @@ type Props = { params: Promise<{ recipientId: string }> };
 export default async function StudentResultPage({ params }: Props) {
   const { recipientId } = await params;
   const session = await resolveSession();
-  if (!session) notFound();
+  if (!session || !canAccessStudentWorkspace(session)) notFound();
 
-  // Resolve recipientId → attemptId
+  // Resolve recipientId Ã¢â€ â€™ attemptId
   const recipient = await prisma.assignmentRecipient.findUnique({
     where: { id: recipientId },
     include: { attempt: { select: { id: true } } },
   });
 
-  if (!recipient || recipient.studentId !== session.id) notFound();
+  if (!recipient || recipient.recipientAccountId !== session.id) notFound();
   if (!recipient.attempt) notFound();
 
   const attemptId = recipient.attempt.id;

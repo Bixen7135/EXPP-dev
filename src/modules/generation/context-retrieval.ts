@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
+﻿import { prisma } from "@/lib/db/prisma";
 import { ForbiddenError } from "@/lib/errors";
 
 const MAX_CHARS_PER_MATERIAL = 8000;
@@ -10,7 +10,7 @@ const MAX_TOTAL_CHARS = 32000;
  */
 export async function buildMaterialContext(
   materialIds: string[],
-  teacherId: string
+  ownerAccountId: string
 ): Promise<string> {
   if (materialIds.length === 0) return "";
 
@@ -18,7 +18,7 @@ export async function buildMaterialContext(
     where: { id: { in: materialIds } },
     select: {
       id: true,
-      teacherId: true,
+      ownerAccountId: true,
       title: true,
       extractedText: true,
       status: true,
@@ -27,7 +27,7 @@ export async function buildMaterialContext(
 
   // Security: all selected materials must belong to the requesting teacher
   for (const mat of materials) {
-    if (mat.teacherId !== teacherId) throw new ForbiddenError();
+    if (mat.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
   }
 
   const parts: string[] = [];
@@ -46,3 +46,4 @@ export async function buildMaterialContext(
 
   return parts.join("\n\n");
 }
+
