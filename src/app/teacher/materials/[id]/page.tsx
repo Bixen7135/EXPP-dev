@@ -20,7 +20,7 @@ export default async function MaterialDetailPage({
 
   const session = await resolveSession();
   if (!session || !canAccessTeacherWorkspace(session)) {
-    redirect("/login");
+    redirect("/sign-in");
   }
 
   let material;
@@ -37,7 +37,7 @@ export default async function MaterialDetailPage({
     <main className="p-8 max-w-3xl mx-auto">
       <Link
         href="/teacher/materials"
-        className="text-sm text-blue-600 hover:underline mb-4 block"
+        className="text-sm workspace-themed-link hover:underline mb-4 block"
       >
         Back to Materials
       </Link>
@@ -64,7 +64,7 @@ export default async function MaterialDetailPage({
       <section>
         <h2 className="text-lg font-semibold mb-2">Extracted Text</h2>
         {material.status === "PROCESSING" && (
-          <p className="text-yellow-700 bg-yellow-50 p-3 rounded text-sm">
+          <p className="rounded p-3 text-sm workspace-accent-surface text-[color:var(--color-blue-100)]">
             Processing...
           </p>
         )}

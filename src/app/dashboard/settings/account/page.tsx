@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolveSession } from "@/lib/auth/session";
+import { ExppBrand } from "@/lib/ui/expp-brand";
 import { UserAvatar } from "@/lib/ui/user-avatar";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 
@@ -93,12 +94,10 @@ function SessionsIcon() {
 }
 
 export default async function DashboardAccountSettingsPage() {
+  const showUpcomingSettings = process.env.NODE_ENV === "production";
   const session = await resolveSession();
   if (!session) {
-    redirect("/login");
-  }
-  if (session.domain !== "GLOBAL") {
-    redirect("/");
+    redirect("/sign-in");
   }
 
   return (
@@ -107,7 +106,8 @@ export default async function DashboardAccountSettingsPage() {
       style={{ fontFamily: SETTINGS_FONT_STACK }}
     >
       <header className="border-b border-slate-800/90 bg-slate-950/90">
-        <div className="mx-auto flex h-[64px] max-w-[1320px] items-center px-[16px] lg:px-[24px]">
+        <div className="mx-auto flex h-[64px] max-w-[1320px] items-center gap-[14px] px-[16px] lg:px-[24px]">
+          <ExppBrand href="/dashboard" variant="header" />
           <h1 className="text-[14px] font-semibold tracking-[-0.01em] text-slate-100">Settings</h1>
         </div>
       </header>
@@ -135,45 +135,52 @@ export default async function DashboardAccountSettingsPage() {
         <div className="grid gap-[24px] lg:grid-cols-[320px_1fr]">
           <aside className="border-b border-slate-800 pb-[20px] lg:border-b-0 lg:border-r lg:pr-[24px]">
             <nav className="space-y-[4px]">
-              <Link
-                href="/dashboard/settings/account"
-                className="flex h-[44px] w-full items-center gap-[10px] rounded-[10px] bg-slate-800/80 px-[12px] text-left text-[14px] font-semibold text-slate-100"
-              >
-                <span className="text-slate-300">
-                  <AccountIcon />
-                </span>
-                <span>Account</span>
-              </Link>
+              <div className="relative h-[44px]">
+                <span className="absolute left-0 top-[8px] h-[28px] w-[6px] rounded-full bg-blue-500" />
+                <Link
+                  href="/dashboard/settings/account"
+                  className="ml-[10px] flex h-[44px] w-[calc(100%-10px)] items-center gap-[10px] rounded-[10px] bg-slate-800/80 px-[12px] text-left text-[14px] font-semibold text-slate-100"
+                >
+                  <span className="text-slate-300">
+                    <AccountIcon />
+                  </span>
+                  <span>Account</span>
+                </Link>
+              </div>
 
-              <button
-                type="button"
+              <Link
+                href="/dashboard/settings/appearance"
                 className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
               >
                 <span className="text-slate-400">
                   <AppearanceIcon />
                 </span>
                 <span>Appearance</span>
-              </button>
+              </Link>
 
-              <button
-                type="button"
-                className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
-              >
-                <span className="text-slate-400">
-                  <AccessibilityIcon />
-                </span>
-                <span>Accessibility</span>
-              </button>
+              {showUpcomingSettings && (
+                <>
+                  <button
+                    type="button"
+                    className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
+                  >
+                    <span className="text-slate-400">
+                      <AccessibilityIcon />
+                    </span>
+                    <span>Accessibility</span>
+                  </button>
 
-              <button
-                type="button"
-                className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
-              >
-                <span className="text-slate-400">
-                  <NotificationsIcon />
-                </span>
-                <span>Notifications</span>
-              </button>
+                  <button
+                    type="button"
+                    className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
+                  >
+                    <span className="text-slate-400">
+                      <NotificationsIcon />
+                    </span>
+                    <span>Notifications</span>
+                  </button>
+                </>
+              )}
             </nav>
 
             <div className="mt-[16px] border-t border-slate-800 pt-[16px]">

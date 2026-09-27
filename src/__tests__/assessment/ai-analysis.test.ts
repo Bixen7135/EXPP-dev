@@ -84,7 +84,9 @@ describe("analyzeAttemptWithAi", () => {
   });
 
   it("throws ValidationError when model response is invalid JSON", async () => {
-    mockAiGenerate.mockResolvedValueOnce({ text: "{invalid" });
+    mockAiGenerate
+      .mockResolvedValueOnce({ text: "{invalid" })
+      .mockResolvedValueOnce({ text: "{still invalid" });
 
     await expect(
       analyzeAttemptWithAi({
@@ -104,5 +106,102 @@ describe("analyzeAttemptWithAi", () => {
         },
       })
     ).rejects.toThrow(ValidationError);
+  });
+
+  it("parses JSON wrapped in markdown code fences", async () => {
+    mockAiGenerate.mockResolvedValueOnce({
+      text: [
+        "```json",
+        JSON.stringify({
+          gradeRationale: "Structured and mostly correct.",
+          reviewPriority: [],
+          items: [
+            {
+              itemOrder: 1,
+              recommendedScore: 1,
+              confidenceValue: 0.9,
+              riskFlags: [],
+              whatIsCorrect: ["Correct option selected."],
+              whatIsIncorrect: [],
+              whatIsMissing: [],
+              teacherFacingComment: "Correct answer.",
+            },
+          ],
+        }),
+        "```",
+      ].join("\n"),
+    });
+
+    const result = await analyzeAttemptWithAi({
+      items: [
+        {
+          order: 1,
+          type: "MULTIPLE_CHOICE",
+          question: "Q1",
+          expectedAnswer: "A",
+          options: ["A", "B"],
+          maxScore: 1,
+        },
+      ],
+      answers: [{ itemOrder: 1, text: "A" }],
+      autoCheckResult: {
+        items: [
+          { itemOrder: 1, autoScore: 1, maxScore: 1, isAutoCheckable: true, isExactMatch: true },
+        ],
+        autoScore: 1,
+        autoMaxScore: 1,
+      },
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.recommendedTotal).toBe(1);
+    expect(mockAiGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it("repairs malformed response via second AI pass", async () => {
+    mockAiGenerate
+      .mockResolvedValueOnce({ text: "Here is result:\n{ invalid json" })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          gradeRationale: "Recovered into strict JSON.",
+          reviewPriority: ["Check details"],
+          items: [
+            {
+              itemOrder: 1,
+              recommendedScore: 0.5,
+              confidenceValue: 0.6,
+              riskFlags: [],
+              whatIsCorrect: ["Partially correct."],
+              whatIsIncorrect: [],
+              whatIsMissing: ["One missing detail."],
+              teacherFacingComment: "Partial answer.",
+            },
+          ],
+        }),
+      });
+
+    const result = await analyzeAttemptWithAi({
+      items: [
+        {
+          order: 1,
+          type: "SHORT_ANSWER",
+          question: "Q1",
+          expectedAnswer: "Paris",
+          maxScore: 1,
+        },
+      ],
+      answers: [{ itemOrder: 1, text: "paris with extra text" }],
+      autoCheckResult: {
+        items: [
+          { itemOrder: 1, autoScore: 0, maxScore: 1, isAutoCheckable: true, isExactMatch: false },
+        ],
+        autoScore: 0,
+        autoMaxScore: 1,
+      },
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.recommendedTotal).toBe(0.5);
+    expect(mockAiGenerate).toHaveBeenCalledTimes(2);
   });
 });

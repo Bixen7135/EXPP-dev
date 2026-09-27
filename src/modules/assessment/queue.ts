@@ -60,3 +60,16 @@ export async function enqueueAssessmentAiJob(data: AssessmentAiJobData): Promise
     jobId: data.runId,
   });
 }
+
+export async function removeAssessmentAiJob(runId: string): Promise<boolean> {
+  const queue = getAssessmentAiQueue();
+  const job = await queue.getJob(runId);
+  if (!job) return false;
+
+  try {
+    await job.remove();
+    return true;
+  } catch {
+    return false;
+  }
+}

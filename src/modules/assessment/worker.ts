@@ -63,9 +63,29 @@ export function startAssessmentAiWorker(): Worker<AssessmentAiJobData> {
     });
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForAssessmentWorker.assessmentWorker = worker;
-  }
+  globalForAssessmentWorker.assessmentWorker = worker;
 
   return worker;
+}
+
+export function getAssessmentAiWorker(): Worker<AssessmentAiJobData> | undefined {
+  return globalForAssessmentWorker.assessmentWorker;
+}
+
+export async function stopAssessmentAiWorker(): Promise<void> {
+  const worker = globalForAssessmentWorker.assessmentWorker;
+  if (!worker) return;
+
+  try {
+    await worker.close();
+  } finally {
+    if (globalForAssessmentWorker.assessmentWorker === worker) {
+      globalForAssessmentWorker.assessmentWorker = undefined;
+    }
+  }
+}
+
+export async function restartAssessmentAiWorker(): Promise<Worker<AssessmentAiJobData>> {
+  await stopAssessmentAiWorker();
+  return startAssessmentAiWorker();
 }

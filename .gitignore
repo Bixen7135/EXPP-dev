@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -44,14 +45,23 @@ next-env.d.ts
 /storage/materials/*
 !/storage/materials/.gitkeep
 
+# AI request/response local logs
+/storage/ai-logs/*
+!/storage/ai-logs/.gitkeep
+
 # AI assistant artifacts (local chats, prompts, and scratch context)
 .claude/
 .claude-code/
 .claude_code/
-.codex/
+.codex/*
+!.codex/
+!.codex/hooks.json
 .openai/
 .chatgpt/
-.cursor/
+.cursor/*
+!.cursor/
+!.cursor/rules/
+!.cursor/rules/graphify.mdc
 .cursorrules
 .cline/
 .roo/
@@ -76,3 +86,8 @@ next-env.d.ts
 /tests.json
 /acceptance_checklist.json
 /requirements_traceability.json
+
+# Local AI context indexes and tool environments
+/graphify-out/
+/.codegraph/
+/.venv/

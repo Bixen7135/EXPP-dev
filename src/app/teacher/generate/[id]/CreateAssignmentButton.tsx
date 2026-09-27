@@ -39,9 +39,9 @@ export default function CreateAssignmentButton({ generationResultId }: Props) {
       <button
         onClick={handleCreate}
         disabled={loading}
-        className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+        className="px-4 py-2 workspace-primary-action text-white rounded text-sm font-medium  disabled:opacity-50"
       >
-        {loading ? "Creating…" : "Edit & Version"}
+        {loading ? "Creatingâ€¦" : "Edit & Version"}
       </button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>

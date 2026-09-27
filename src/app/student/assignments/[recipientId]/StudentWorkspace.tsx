@@ -27,7 +27,37 @@ type HelpChatMessage = {
   content: string;
 };
 
+type RestrictedEventType =
+  | "COPY_BLOCKED"
+  | "SCREENSHOT_ATTEMPT"
+  | "TAB_SWITCH"
+  | "WINDOW_BLUR";
+
 const AUTOSAVE_DELAY_MS = 800;
+const RESTRICTED_NOTICE_TIMEOUT_MS = 2400;
+const RESTRICTED_EVENT_COOLDOWN_MS: Record<RestrictedEventType, number> = {
+  COPY_BLOCKED: 1000,
+  SCREENSHOT_ATTEMPT: 1200,
+  TAB_SWITCH: 1600,
+  WINDOW_BLUR: 1600,
+};
+
+function isProtectedElementTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest('[data-protected-question="true"]') !== null;
+}
+
+function isProtectedNode(node: Node | null): boolean {
+  if (!node) return false;
+  const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  return element?.closest('[data-protected-question="true"]') !== null;
+}
+
+function selectionTouchesProtectedContent(): boolean {
+  const selection = window.getSelection();
+  if (!selection) return false;
+  return isProtectedNode(selection.anchorNode) || isProtectedNode(selection.focusNode);
+}
 
 function getQuestionTypeLabel(type: StudentItemContent["type"]): string {
   return type.replaceAll("_", " ");
@@ -88,9 +118,17 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
   const [helpError, setHelpError] = useState<string | null>(null);
   const [helpChats, setHelpChats] = useState<Record<number, HelpChatMessage[]>>({});
   const [navigatorHeight, setNavigatorHeight] = useState<number | null>(null);
+  const [restrictedNotice, setRestrictedNotice] = useState<string | null>(null);
   const questionPaneRef = useRef<HTMLDivElement | null>(null);
   const chatBodyRef = useRef<HTMLDivElement | null>(null);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
+  const restrictedNoticeTimerRef = useRef<number | null>(null);
+  const restrictedEventCooldownRef = useRef<Record<RestrictedEventType, number>>({
+    COPY_BLOCKED: 0,
+    SCREENSHOT_ATTEMPT: 0,
+    TAB_SWITCH: 0,
+    WINDOW_BLUR: 0,
+  });
 
   useEffect(() => {
     load(initialAttempt.id, initialAttempt.status, initialAttempt.answers);
@@ -100,6 +138,11 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
   const isSubmitted = status === "SUBMITTED";
   const { title, instructions, items } = initialAttempt.assignmentContent;
   const aiHelpMode = initialAttempt.aiHelpMode;
+  const isRestrictedMode =
+    !isSubmitted &&
+    initialAttempt.distributionStatus === "MANDATORY" &&
+    initialAttempt.isGraded &&
+    aiHelpMode === "NO_HELP";
   const helpEnabled = aiHelpMode === "CLARIFICATION" || aiHelpMode === "GUIDED";
 
   const questionOrders = useMemo(
@@ -178,6 +221,137 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
     () => formatSaveState(saveState, isSaving, isDirty, hasPendingAutosave, lastSavedAt),
     [saveState, isSaving, isDirty, hasPendingAutosave, lastSavedAt]
   );
+
+  const showRestrictedNotice = useCallback((message: string) => {
+    setRestrictedNotice(message);
+    if (restrictedNoticeTimerRef.current !== null) {
+      window.clearTimeout(restrictedNoticeTimerRef.current);
+    }
+    restrictedNoticeTimerRef.current = window.setTimeout(() => {
+      setRestrictedNotice(null);
+      restrictedNoticeTimerRef.current = null;
+    }, RESTRICTED_NOTICE_TIMEOUT_MS);
+  }, []);
+
+  const reportRestrictedEvent = useCallback(
+    async (eventType: RestrictedEventType, meta?: Record<string, unknown>) => {
+      if (!isRestrictedMode || !attemptId) return;
+
+      const now = Date.now();
+      const lastTs = restrictedEventCooldownRef.current[eventType];
+      if (now - lastTs < RESTRICTED_EVENT_COOLDOWN_MS[eventType]) return;
+      restrictedEventCooldownRef.current[eventType] = now;
+
+      try {
+        await fetch(`/api/attempts/${attemptId}/monitor`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventType, meta }),
+          keepalive: true,
+        });
+      } catch {
+        // Silent: monitoring must not break assignment flow.
+      }
+    },
+    [attemptId, isRestrictedMode]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (restrictedNoticeTimerRef.current !== null) {
+        window.clearTimeout(restrictedNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isRestrictedMode || !attemptId) return;
+
+    const handleCopy = (event: ClipboardEvent) => {
+      const shouldBlock =
+        isProtectedElementTarget(event.target) || selectionTouchesProtectedContent();
+      if (!shouldBlock) return;
+
+      event.preventDefault();
+      void reportRestrictedEvent("COPY_BLOCKED", { channel: "copy" });
+      showRestrictedNotice("Copying question text is disabled in restricted mode.");
+    };
+
+    const handleCut = (event: ClipboardEvent) => {
+      const shouldBlock =
+        isProtectedElementTarget(event.target) || selectionTouchesProtectedContent();
+      if (!shouldBlock) return;
+
+      event.preventDefault();
+      void reportRestrictedEvent("COPY_BLOCKED", { channel: "cut" });
+      showRestrictedNotice("Cutting question text is disabled in restricted mode.");
+    };
+
+    const handleContextMenu = (event: MouseEvent) => {
+      if (!isProtectedElementTarget(event.target)) return;
+      event.preventDefault();
+      void reportRestrictedEvent("COPY_BLOCKED", { channel: "contextmenu" });
+      showRestrictedNotice("Context actions for question text are disabled in restricted mode.");
+    };
+
+    const handleSelectStart = (event: Event) => {
+      if (!isProtectedElementTarget(event.target)) return;
+      event.preventDefault();
+    };
+
+    const handleDragStart = (event: DragEvent) => {
+      if (!isProtectedElementTarget(event.target)) return;
+      event.preventDefault();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") return;
+      void reportRestrictedEvent("TAB_SWITCH", { visibilityState: document.visibilityState });
+      showRestrictedNotice("Switching tabs is logged in restricted mode.");
+    };
+
+    const handleWindowBlur = () => {
+      void reportRestrictedEvent("WINDOW_BLUR", { reason: "window_blur" });
+      showRestrictedNotice("Switching windows is logged in restricted mode.");
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const isScreenshotShortcut =
+        event.key === "PrintScreen" ||
+        ((event.ctrlKey || event.metaKey) && event.shiftKey && ["s", "3", "4", "5"].includes(key));
+      if (!isScreenshotShortcut) return;
+
+      event.preventDefault();
+      void reportRestrictedEvent("SCREENSHOT_ATTEMPT", {
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+      });
+      showRestrictedNotice("Screenshot attempts are blocked and logged in restricted mode.");
+    };
+
+    document.addEventListener("copy", handleCopy, { capture: true });
+    document.addEventListener("cut", handleCut, { capture: true });
+    document.addEventListener("contextmenu", handleContextMenu, { capture: true });
+    document.addEventListener("selectstart", handleSelectStart, { capture: true });
+    document.addEventListener("dragstart", handleDragStart, { capture: true });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+
+    return () => {
+      document.removeEventListener("copy", handleCopy, { capture: true });
+      document.removeEventListener("cut", handleCut, { capture: true });
+      document.removeEventListener("contextmenu", handleContextMenu, { capture: true });
+      document.removeEventListener("selectstart", handleSelectStart, { capture: true });
+      document.removeEventListener("dragstart", handleDragStart, { capture: true });
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+    };
+  }, [attemptId, isRestrictedMode, reportRestrictedEvent, showRestrictedNotice]);
 
   useEffect(() => {
     if (!isHelpSidebarOpen || !chatBodyRef.current) return;
@@ -433,7 +607,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
           <span>
             AI Help: <strong className="text-gray-700">{AI_HELP_MODE_LABELS[aiHelpMode]}</strong>
           </span>
-          {initialAttempt.isGraded && <span className="text-amber-600 font-medium">Graded</span>}
+          {initialAttempt.isGraded && <span className="text-emerald-300 font-medium">Graded</span>}
           {initialAttempt.distributionStatus === "MANDATORY" && (
             <span className="text-red-600 font-medium">Mandatory</span>
           )}
@@ -446,19 +620,34 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
         </div>
       )}
 
+      {isRestrictedMode && (
+        <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+          Restricted mode is active. Question copy, screenshots, and tab/window switches are
+          monitored.
+        </div>
+      )}
+      {restrictedNotice && (
+        <div className="rounded border p-3 text-sm workspace-accent-surface text-[color:var(--color-blue-100)]">
+          {restrictedNotice}
+        </div>
+      )}
+
       {aiHelpMode === "NO_HELP" && !isSubmitted && (
         <div className="bg-gray-50 border rounded p-3 text-sm text-gray-600">
           {AI_HELP_MODE_DESCRIPTIONS.NO_HELP}
         </div>
       )}
       {aiHelpMode === "POST_ASSESSMENT" && !isSubmitted && (
-        <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-700">
+        <div className="bg-[color:var(--color-blue-500)]/10 border border-[color:var(--color-blue-500)]/35 rounded p-3 text-sm text-[color:var(--color-blue-200)]">
           {AI_HELP_MODE_DESCRIPTIONS.POST_ASSESSMENT}
         </div>
       )}
 
       {instructions && (
-        <div className="bg-gray-50 rounded-lg p-4">
+        <div
+          className={`bg-gray-50 rounded-lg p-4 ${isRestrictedMode ? "select-none" : ""}`}
+          data-protected-question={isRestrictedMode ? "true" : undefined}
+        >
           <h2 className="text-sm font-semibold text-gray-700 mb-1">Instructions</h2>
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{instructions}</p>
         </div>
@@ -477,7 +666,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
         </div>
         <div className="h-2 bg-gray-100 rounded">
           <div
-            className="h-2 bg-blue-600 rounded transition-all"
+            className="h-2 workspace-primary-action rounded transition-all"
             style={{ width: `${completionPercent}%` }}
           />
         </div>
@@ -500,10 +689,10 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
               aria-current={navItem.status === "current" ? "step" : undefined}
               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
                 navItem.status === "current"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "workspace-primary-action text-white border-[color:var(--color-blue-600)]"
                   : navItem.status === "answered"
                   ? "bg-green-50 text-green-700 border-green-200"
-                  : "bg-white text-gray-700 border-gray-200"
+                  : "bg-slate-950/30 text-gray-700 border-gray-200"
               } disabled:opacity-50`}
             >
               Q{navItem.order}
@@ -517,7 +706,10 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
           {viewMode === "QUESTION" && currentQuestion && (
             <section className="border rounded-lg p-5 space-y-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+                <div
+                  className={`space-y-1 ${isRestrictedMode ? "select-none" : ""}`}
+                  data-protected-question={isRestrictedMode ? "true" : undefined}
+                >
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     Q{currentQuestion.order} - {getQuestionTypeLabel(currentQuestion.type)}
                   </p>
@@ -527,7 +719,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                   <button
                     type="button"
                     onClick={openHelpForCurrentQuestion}
-                    className="text-xs text-blue-600 hover:underline shrink-0"
+                    className="text-xs workspace-themed-link hover:underline shrink-0"
                   >
                     Ask AI
                   </button>
@@ -535,7 +727,10 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
               </div>
 
               {currentQuestion.type === "MULTIPLE_CHOICE" && currentQuestion.options && !isSubmitted && (
-                <div className="space-y-2">
+                <div
+                  className={`space-y-2 ${isRestrictedMode ? "select-none" : ""}`}
+                  data-protected-question={isRestrictedMode ? "true" : undefined}
+                >
                   {currentQuestion.options.map((opt, i) => (
                     <label key={i} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input
@@ -591,7 +786,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                     type="button"
                     onClick={() => void handleNext()}
                     disabled={isSubmitting}
-                    className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-2 workspace-primary-action text-white rounded text-sm font-medium  disabled:opacity-50"
                   >
                     {canGoNext ? "Next" : "Review"}
                   </button>
@@ -621,13 +816,20 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                         </p>
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${
-                            answered ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                            answered ? "bg-green-100 text-green-700" : "bg-slate-800 text-slate-300"
                           }`}
                         >
                           {answered ? "Answered" : "Unanswered"}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{item.question}</p>
+                      <p
+                        className={`text-sm text-gray-700 whitespace-pre-wrap ${
+                          isRestrictedMode ? "select-none" : ""
+                        }`}
+                        data-protected-question={isRestrictedMode ? "true" : undefined}
+                      >
+                        {item.question}
+                      </p>
                       <div className="bg-gray-50 border rounded p-3 text-sm text-gray-700 whitespace-pre-wrap">
                         {answered ? answerText : <span className="text-gray-400 italic">No answer yet</span>}
                       </div>
@@ -636,7 +838,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                           type="button"
                           onClick={() => void moveToQuestion(item.order)}
                           disabled={isSubmitting}
-                          className="text-sm text-blue-600 hover:underline disabled:opacity-50"
+                          className="text-sm workspace-themed-link hover:underline disabled:opacity-50"
                         >
                           Edit question
                         </button>
@@ -644,7 +846,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                           <button
                             type="button"
                             onClick={() => openHelpSidebar(item.order)}
-                            className="text-sm text-blue-600 hover:underline"
+                            className="text-sm workspace-themed-link hover:underline"
                           >
                             Ask AI
                           </button>
@@ -658,7 +860,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
               {!isSubmitted && (
                 <footer className="p-4 border-t space-y-3">
                   {unansweredCount > 0 && (
-                    <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    <div className="rounded border p-3 text-sm workspace-accent-surface text-[color:var(--color-blue-100)]">
                       {submitConfirm
                         ? `Submit anyway with ${unansweredCount} unanswered question(s)?`
                         : `You still have ${unansweredCount} unanswered question(s).`}
@@ -719,7 +921,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                 <button
                   type="button"
                   onClick={() => void openReview()}
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs workspace-themed-link hover:underline"
                 >
                   Review
                 </button>
@@ -736,10 +938,10 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                     aria-current={navItem.status === "current" ? "step" : undefined}
                     className={`w-full text-left px-3 py-2 rounded border text-sm font-medium transition disabled:opacity-50 ${
                       navItem.status === "current"
-                        ? "bg-blue-600 text-white border-blue-600"
+                        ? "workspace-primary-action text-white border-[color:var(--color-blue-600)]"
                         : navItem.status === "answered"
                         ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                        : "bg-slate-950/30 text-gray-700 border-gray-200 hover:bg-gray-50"
                     }`}
                   >
                     Question {navItem.order}
@@ -765,7 +967,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
             />
           )}
           <aside
-            className={`fixed inset-y-0 right-0 w-full max-w-md border-l bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
+            className={`fixed inset-y-0 right-0 w-full max-w-md border-l bg-slate-950/30 shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
               isHelpSidebarOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
             }`}
             aria-hidden={!isHelpSidebarOpen}
@@ -790,7 +992,12 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
               <p className="text-xs text-gray-600">{AI_HELP_MODE_DESCRIPTIONS[aiHelpMode]}</p>
 
               {activeHelpQuestion && (
-                <div className="rounded bg-gray-50 border px-3 py-2">
+                <div
+                  className={`rounded bg-gray-50 border px-3 py-2 ${
+                    isRestrictedMode ? "select-none" : ""
+                  }`}
+                  data-protected-question={isRestrictedMode ? "true" : undefined}
+                >
                   <p className="text-[11px] text-gray-500 uppercase tracking-wide">
                     Question {activeHelpQuestion.order}
                   </p>
@@ -815,7 +1022,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                   key={`${message.role}-${index}`}
                   className={`max-w-[90%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
                     message.role === "student"
-                      ? "ml-auto bg-blue-600 text-white"
+                      ? "ml-auto workspace-primary-action text-white"
                       : "mr-auto bg-gray-100 text-gray-900 border border-gray-200"
                   }`}
                 >
@@ -845,7 +1052,7 @@ export default function StudentWorkspace({ initialAttempt }: Props) {
                 type="button"
                 onClick={handleAskHelp}
                 disabled={helpLoading || !helpQuestion.trim() || activeHelpItem === null}
-                className="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                className="w-full px-3 py-2 workspace-primary-action text-white rounded text-sm font-medium  disabled:opacity-50"
               >
                 {helpLoading ? "Sending..." : "Send"}
               </button>

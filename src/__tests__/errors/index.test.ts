@@ -8,6 +8,7 @@ import {
   NotFoundError,
   ValidationError,
   RateLimitError,
+  QueueUnavailableError,
 } from "@/lib/errors";
 
 describe("API response envelope", () => {
@@ -55,5 +56,11 @@ describe("error classes", () => {
 
   it("RateLimitError defaults to 429", () => {
     expect(new RateLimitError().statusCode).toBe(429);
+  });
+
+  it("QueueUnavailableError defaults to 503", () => {
+    const e = new QueueUnavailableError();
+    expect(e.statusCode).toBe(503);
+    expect(e.code).toBe("QUEUE_UNAVAILABLE");
   });
 });

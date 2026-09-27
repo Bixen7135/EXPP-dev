@@ -12,6 +12,7 @@ import {
   type TagInput,
 } from "./types";
 import { ValidationError, NotFoundError, ForbiddenError } from "@/lib/errors";
+import { enqueueMaterialIndexJob } from "./index-queue";
 
 const GENERIC_MIME_TYPES = new Set(["", "application/octet-stream"]);
 const MAX_FOLDER_NAME_LENGTH = 120;
@@ -52,6 +53,7 @@ interface MaterialRow {
   storagePath: string;
   extractedText: string | null;
   status: string;
+  indexStatus: "PENDING" | "INDEXING" | "READY" | "ERROR";
   createdAt: Date;
   updatedAt: Date;
   folderId: string | null;
@@ -440,6 +442,7 @@ export async function uploadMaterial(opts: {
       fileSize: buffer.byteLength,
       storagePath: "", // updated after file write
       status: "PROCESSING",
+      indexStatus: "PENDING",
       tags: {
         create: tags.map(({ key, value }) => ({ key, value })),
       },
@@ -462,8 +465,20 @@ export async function uploadMaterial(opts: {
         storagePath: filePath,
         extractedText,
         status: "READY",
+        indexStatus: "PENDING",
       },
       include: { tags: true },
+    });
+
+    await enqueueMaterialIndexJob({
+      materialId: updated.id,
+      ownerAccountId,
+      traceId: `material-upload:${updated.id}`,
+    }).catch((err) => {
+      console.warn("[materials] failed to enqueue indexing job", {
+        materialId: updated.id,
+        err,
+      });
     });
 
     let folderPath: string | null = null;
@@ -478,7 +493,7 @@ export async function uploadMaterial(opts: {
     // Mark as ERROR; don't delete the record so the teacher can see failure
     await prisma.material.update({
       where: { id: material.id },
-      data: { status: "ERROR", storagePath: filePath },
+      data: { status: "ERROR", indexStatus: "ERROR", storagePath: filePath },
     });
     throw err;
   }
@@ -586,6 +601,7 @@ function toSummary(m: MaterialRow, folderPath: string | null): MaterialSummary {
     mimeType: m.mimeType,
     fileSize: m.fileSize,
     status: m.status,
+    indexStatus: m.indexStatus,
     createdAt: m.createdAt,
     updatedAt: m.updatedAt,
     folderId: m.folderId,

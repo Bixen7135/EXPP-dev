@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import type { AssignmentVersionSummary } from "@/modules/assignments/types";
 import type { AssignableStudentSummary } from "@/modules/distribution/types";
 
 const ALL_MODES: AiHelpMode[] = ["NO_HELP", "CLARIFICATION", "GUIDED", "POST_ASSESSMENT"];
+type WorkspaceMode = "STANDARD" | "RESTRICTED";
 
 interface Props {
   assignmentId: string;
@@ -24,6 +25,7 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
   const router = useRouter();
   const [versionId, setVersionId] = useState(currentVersionId ?? versions[0]?.id ?? "");
   const [deadline, setDeadline] = useState("");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("STANDARD");
   const [distributionStatus, setDistributionStatus] = useState<"MANDATORY" | "PRACTICE">(
     "MANDATORY"
   );
@@ -34,7 +36,10 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isMandatoryGraded = distributionStatus === "MANDATORY" && isGraded;
+  const isRestrictedMode = workspaceMode === "RESTRICTED";
+  const effectiveDistributionStatus = isRestrictedMode ? "MANDATORY" : distributionStatus;
+  const effectiveIsGraded = isRestrictedMode ? true : isGraded;
+  const isMandatoryGraded = effectiveDistributionStatus === "MANDATORY" && effectiveIsGraded;
   const allowedModes = isMandatoryGraded ? MANDATORY_GRADED_ALLOWED_MODES : ALL_MODES;
 
   const selectedStudentSet = useMemo(() => new Set(selectedStudentIds), [selectedStudentIds]);
@@ -56,8 +61,13 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
   const allFilteredSelected =
     filteredStudents.length > 0 && filteredSelectedCount === filteredStudents.length;
 
-  // If current mode is no longer allowed after status/graded change, reset
-  const effectiveMode = allowedModes.includes(aiHelpMode) ? aiHelpMode : "NO_HELP";
+  // If current mode is no longer allowed after status/graded change, reset.
+  // Restricted mode hard-locks to NO_HELP.
+  const effectiveMode: AiHelpMode = isRestrictedMode
+    ? "NO_HELP"
+    : allowedModes.includes(aiHelpMode)
+    ? aiHelpMode
+    : "NO_HELP";
 
   const toggleStudent = (studentId: string) => {
     setSelectedStudentIds((prev) =>
@@ -103,9 +113,10 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
           assignmentId,
           versionId,
           deadline: deadline || null,
-          distributionStatus,
-          isGraded,
+          distributionStatus: effectiveDistributionStatus,
+          isGraded: effectiveIsGraded,
           aiHelpMode: effectiveMode,
+          restrictedMode: isRestrictedMode,
           recipientUserIds: ids,
         }),
       });
@@ -155,6 +166,39 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
         />
       </div>
 
+      {/* Workspace mode */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Workspace mode</label>
+        <div className="flex gap-6">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="workspaceMode"
+              value="STANDARD"
+              checked={workspaceMode === "STANDARD"}
+              onChange={() => setWorkspaceMode("STANDARD")}
+            />
+            Standard
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="workspaceMode"
+              value="RESTRICTED"
+              checked={workspaceMode === "RESTRICTED"}
+              onChange={() => setWorkspaceMode("RESTRICTED")}
+            />
+            Restricted
+          </label>
+        </div>
+        {isRestrictedMode && (
+          <p className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+            Restricted mode enforces Mandatory + Graded + No Help and enables anti-copy,
+            anti-screenshot, and tab/window switch monitoring.
+          </p>
+        )}
+      </div>
+
       {/* Status */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Assignment type</label>
@@ -165,8 +209,9 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
                 type="radio"
                 name="distributionStatus"
                 value={s}
-                checked={distributionStatus === s}
+                checked={effectiveDistributionStatus === s}
                 onChange={() => setDistributionStatus(s)}
+                disabled={isRestrictedMode}
               />
               {s.charAt(0) + s.slice(1).toLowerCase()}
             </label>
@@ -179,8 +224,9 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
-            checked={isGraded}
+            checked={effectiveIsGraded}
             onChange={(e) => setIsGraded(e.target.checked)}
+            disabled={isRestrictedMode}
           />
           <span className="font-medium text-gray-700">Graded</span>
         </label>
@@ -189,15 +235,20 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
       {/* AI Help Mode */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">AI help mode</label>
-        {isMandatoryGraded && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
+        {isMandatoryGraded && !isRestrictedMode && (
+          <p className="mb-2 rounded border p-2 text-xs workspace-accent-surface text-[color:var(--color-blue-100)]">
             Mandatory graded assignments only allow <strong>No Help</strong> or{" "}
             <strong>Clarification Only</strong>.
           </p>
         )}
+        {isRestrictedMode && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 mb-2">
+            AI help is locked to <strong>No Help</strong> in restricted mode.
+          </p>
+        )}
         <div className="space-y-2">
           {ALL_MODES.map((m) => {
-            const disabled = !allowedModes.includes(m);
+            const disabled = isRestrictedMode ? m !== "NO_HELP" : !allowedModes.includes(m);
             return (
               <label
                 key={m}
@@ -227,7 +278,7 @@ export default function AssignForm({ assignmentId, currentVersionId, versions, s
         <label className="block text-sm font-medium text-gray-700 mb-2">Students</label>
 
         {students.length === 0 ? (
-          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+          <p className="rounded border p-3 text-sm workspace-accent-surface text-[color:var(--color-blue-100)]">
             No active students available for assignment.
           </p>
         ) : (

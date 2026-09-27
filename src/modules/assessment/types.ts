@@ -45,6 +45,19 @@ export interface AssessmentAiRecommendation {
   generatedAt: string;
 }
 
+export interface StudentAiReviewItem {
+  itemOrder: number;
+  whatIsCorrect: string[];
+  whatIsIncorrect: string[];
+  whatIsMissing: string[];
+}
+
+export interface StudentAiReview {
+  gradeRationale: string;
+  reviewPriority: string[];
+  items: StudentAiReviewItem[];
+}
+
 export interface AssessmentAiRunSummary {
   id: string;
   assessmentId: string;
@@ -97,5 +110,6 @@ export interface StudentResult {
   grade: number | null;
   maxGrade: number | null;
   comment: string | null;
+  aiReview: StudentAiReview | null;
   publishedAt: Date;
 }

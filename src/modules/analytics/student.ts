@@ -1,10 +1,25 @@
 import { prisma } from "@/lib/db/prisma";
+import type {
+  AnalyticsOverview,
+  AnalyticsPeriod,
+  BreakdownBySubject,
+  BreakdownByTeacher,
+  InsightRecommendation,
+  RecommendationStatus,
+} from "./insight-service";
+import {
+  buildLearnerInsightView,
+  resolveSubjectFromAssignmentContext,
+} from "./insight-service";
 
 export interface StudentAssignmentAnalytic {
   recipientId: string;
   distributionId: string;
   assignmentTitle: string;
+  creatorId: string;
   creatorName: string;
+  subjectKey: string;
+  subjectLabel: string;
   distributionStatus: string;
   isGraded: boolean;
   aiHelpMode: string;
@@ -27,18 +42,39 @@ export interface StudentAnalytics {
     submitted: number;
     resultsPublished: number;
   };
+  overview: AnalyticsOverview;
+  teacherBreakdown: BreakdownByTeacher[];
+  subjectBreakdown: BreakdownBySubject[];
+  recommendation: InsightRecommendation | null;
+  recommendationStatus: RecommendationStatus;
+  subjectFilterApplied: string | null;
 }
 
 export async function getStudentAnalytics(
-  recipientAccountId: string
+  recipientAccountId: string,
+  opts?: {
+    teacherId?: string | null;
+    subject?: string | null;
+    period?: AnalyticsPeriod;
+  }
 ): Promise<StudentAnalytics> {
   const recipients = await prisma.assignmentRecipient.findMany({
     where: { recipientAccountId },
     include: {
       distribution: {
         include: {
-          assignment: { select: { title: true } },
-          creatorAccount: { select: { displayName: true } },
+          assignment: {
+            select: {
+              title: true,
+              tags: true,
+              generationResult: {
+                select: {
+                  request: { select: { constraints: true } },
+                },
+              },
+            },
+          },
+          creatorAccount: { select: { id: true, displayName: true } },
         },
       },
       attempt: {
@@ -52,8 +88,8 @@ export async function getStudentAnalytics(
     orderBy: { createdAt: "desc" },
   });
 
-  const assignments: StudentAssignmentAnalytic[] = recipients.map((r) => {
-    const attempt = r.attempt;
+  const assignments: StudentAssignmentAnalytic[] = recipients.map((recipient) => {
+    const attempt = recipient.attempt;
     const assessment = attempt?.assessment;
     const resultPublished = assessment?.status === "PUBLISHED";
 
@@ -64,16 +100,31 @@ export async function getStudentAnalytics(
         ? Math.round((grade / maxGrade) * 100)
         : null;
 
+    const assignmentTags = Array.isArray(recipient.distribution.assignment.tags)
+      ? recipient.distribution.assignment.tags
+      : [];
+    const subject = resolveSubjectFromAssignmentContext({
+      tags: assignmentTags.map((tag) => ({
+        key: tag.key,
+        value: tag.value,
+      })),
+      generationConstraints:
+        recipient.distribution.assignment.generationResult?.request.constraints ?? null,
+    });
+
     return {
-      recipientId: r.id,
-      distributionId: r.distributionId,
-      assignmentTitle: r.distribution.assignment.title,
-      creatorName: r.distribution.creatorAccount.displayName,
-      distributionStatus: r.distribution.status,
-      isGraded: r.distribution.isGraded,
-      aiHelpMode: r.distribution.aiHelpMode,
-      deadline: r.distribution.deadline,
-      recipientStatus: r.status,
+      recipientId: recipient.id,
+      distributionId: recipient.distributionId,
+      assignmentTitle: recipient.distribution.assignment.title,
+      creatorId: recipient.distribution.creatorAccount.id,
+      creatorName: recipient.distribution.creatorAccount.displayName,
+      subjectKey: subject.subjectKey,
+      subjectLabel: subject.subjectLabel,
+      distributionStatus: recipient.distribution.status,
+      isGraded: recipient.distribution.isGraded,
+      aiHelpMode: recipient.distribution.aiHelpMode,
+      deadline: recipient.distribution.deadline,
+      recipientStatus: recipient.status,
       attemptStatus: attempt ? (attempt.status as "DRAFT" | "SUBMITTED") : null,
       grade,
       maxGrade,
@@ -83,15 +134,32 @@ export async function getStudentAnalytics(
   });
 
   const totals = assignments.reduce(
-    (acc, a) => ({
+    (acc, item) => ({
       total: acc.total + 1,
-      notStarted: acc.notStarted + (a.recipientStatus === "PENDING" ? 1 : 0),
-      inProgress: acc.inProgress + (a.recipientStatus === "ACTIVE" ? 1 : 0),
-      submitted: acc.submitted + (a.recipientStatus === "SUBMITTED" ? 1 : 0),
-      resultsPublished: acc.resultsPublished + (a.resultPublished ? 1 : 0),
+      notStarted: acc.notStarted + (item.recipientStatus === "PENDING" ? 1 : 0),
+      inProgress: acc.inProgress + (item.recipientStatus === "ACTIVE" ? 1 : 0),
+      submitted: acc.submitted + (item.recipientStatus === "SUBMITTED" ? 1 : 0),
+      resultsPublished: acc.resultsPublished + (item.resultPublished ? 1 : 0),
     }),
     { total: 0, notStarted: 0, inProgress: 0, submitted: 0, resultsPublished: 0 }
   );
 
-  return { recipientAccountId, assignments, totals };
+  const insight = await buildLearnerInsightView({
+    learnerAccountId: recipientAccountId,
+    teacherId: opts?.teacherId ?? null,
+    subject: opts?.subject ?? null,
+    period: opts?.period ?? "all_time",
+  });
+
+  return {
+    recipientAccountId,
+    assignments,
+    totals,
+    overview: insight.overview,
+    teacherBreakdown: insight.teacherBreakdown,
+    subjectBreakdown: insight.subjectBreakdown,
+    recommendation: insight.recommendation,
+    recommendationStatus: insight.recommendationStatus,
+    subjectFilterApplied: insight.subjectFilterApplied,
+  };
 }

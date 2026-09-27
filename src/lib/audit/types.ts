@@ -1,9 +1,10 @@
 export type AuditAction =
   // Auth
-  | "auth.register"
-  | "auth.login"
+  | "auth.sign_up"
+  | "auth.sign_in"
   | "auth.logout"
-  | "auth.login_failed"
+  | "auth.sign_in_failed"
+  | "auth.sign_in_blocked_unverified"
   | "auth.rate_limited"
   | "auth.session_expired"
   // Route access

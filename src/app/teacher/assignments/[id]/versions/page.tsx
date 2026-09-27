@@ -50,13 +50,13 @@ export default async function AssignmentVersionsPage({ params }: Props) {
             return (
               <li
                 key={v.id}
-                className={`p-4 border rounded-lg flex items-start justify-between gap-4 ${isCurrent ? "border-blue-300 bg-blue-50" : ""}`}
+                className={`p-4 border rounded-lg flex items-start justify-between gap-4 ${isCurrent ? "border-[color:var(--color-blue-300)] bg-[color:var(--color-blue-500)]/10" : ""}`}
               >
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">v{v.versionNumber}</span>
                     {isCurrent && (
-                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-medium">
+                      <span className="text-xs px-2 py-0.5 bg-[color:var(--color-blue-500)]/12 text-[color:var(--color-blue-200)] rounded-full font-medium">
                         Current
                       </span>
                     )}

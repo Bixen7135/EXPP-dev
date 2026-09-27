@@ -26,6 +26,12 @@ const longItem: AssignmentItemContent = {
 };
 
 describe("autoCheck", () => {
+  it("caps MULTIPLE_CHOICE max score to 1 even if source maxScore is higher", () => {
+    const result = autoCheck([{ ...mcItem, maxScore: 5 }], [{ itemOrder: 1, text: "4" }]);
+    expect(result.items[0].maxScore).toBe(1);
+    expect(result.items[0].autoScore).toBe(1);
+  });
+
   it("marks correct MC answer as score 1", () => {
     const result = autoCheck([mcItem], [{ itemOrder: 1, text: "4" }]);
     expect(result.items[0].autoScore).toBe(1);

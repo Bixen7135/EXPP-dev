@@ -16,6 +16,16 @@ export const ConstraintsSchema = z.object({
     .max(20, "Maximum 20 questions"),
   educationalGoals: z.string().max(MAX_LONG_CONSTRAINT_TEXT_LENGTH).optional(),
   additionalInstructions: z.string().max(MAX_LONG_CONSTRAINT_TEXT_LENGTH).optional(),
+  knowledgeMode: z.enum(["INTERNAL_ONLY", "HYBRID_EXTERNAL"]).default("INTERNAL_ONLY"),
+  externalSourceProfileId: z.string().min(1).max(191).optional(),
+}).superRefine((value, ctx) => {
+  if (value.knowledgeMode === "HYBRID_EXTERNAL" && !value.externalSourceProfileId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "externalSourceProfileId is required when knowledgeMode is HYBRID_EXTERNAL",
+      path: ["externalSourceProfileId"],
+    });
+  }
 });
 
 export function validateConstraints(raw: unknown): GenerationConstraints {
@@ -24,6 +34,12 @@ export function validateConstraints(raw: unknown): GenerationConstraints {
     const issues = result.error.issues ?? (result.error as { errors?: { message: string }[] }).errors ?? [];
     const msg = issues.map((e: { message: string }) => e.message).join("; ");
     throw new ValidationError(`Invalid constraints: ${msg}`);
+  }
+  if (result.data.knowledgeMode === "INTERNAL_ONLY") {
+    return {
+      ...result.data,
+      externalSourceProfileId: undefined,
+    };
   }
   return result.data;
 }

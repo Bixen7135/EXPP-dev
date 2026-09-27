@@ -35,7 +35,11 @@ export async function POST(req: NextRequest, { params }: Params): Promise<NextRe
     return NextResponse.json(ok(assessment, traceId));
   } catch (err: unknown) {
     const e = err as { code?: string; message?: string; statusCode?: number };
-    if (e.code === "NOT_FOUND" || e.code === "FORBIDDEN") {
+    if (
+      e.code === "NOT_FOUND" ||
+      e.code === "FORBIDDEN" ||
+      e.code === "QUEUE_UNAVAILABLE"
+    ) {
       return NextResponse.json(fail(e.message ?? "Error", e.code, traceId), {
         status: e.statusCode ?? 400,
       });

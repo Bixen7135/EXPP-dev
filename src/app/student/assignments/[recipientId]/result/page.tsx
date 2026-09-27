@@ -13,7 +13,7 @@ export default async function StudentResultPage({ params }: Props) {
   const session = await resolveSession();
   if (!session || !canAccessStudentWorkspace(session)) notFound();
 
-  // Resolve recipientId Ã¢â€ â€™ attemptId
+  // Resolve recipientId ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ attemptId
   const recipient = await prisma.assignmentRecipient.findUnique({
     where: { id: recipientId },
     include: { attempt: { select: { id: true } } },
@@ -43,7 +43,7 @@ export default async function StudentResultPage({ params }: Props) {
             <p className="text-sm">Your teacher has not published the result for this assignment yet.</p>
             <Link
               href="/student/assignments"
-              className="mt-4 inline-block text-sm text-blue-600 hover:underline"
+              className="mt-4 inline-block text-sm workspace-themed-link hover:underline"
             >
               Back to assignments
             </Link>
@@ -95,6 +95,44 @@ export default async function StudentResultPage({ params }: Props) {
         <div className="border rounded-lg p-4 space-y-1">
           <h2 className="text-sm font-semibold text-gray-700">Teacher Feedback</h2>
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{result.comment}</p>
+        </div>
+      )}
+
+      {result.aiReview && (
+        <div className="border rounded-lg p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-gray-700">AI Review</h2>
+          <p className="text-sm text-gray-700">{result.aiReview.gradeRationale}</p>
+          {result.aiReview.reviewPriority.length > 0 && (
+            <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
+              {result.aiReview.reviewPriority.map((priority) => (
+                <li key={priority}>{priority}</li>
+              ))}
+            </ul>
+          )}
+          {result.aiReview.items.length > 0 && (
+            <div className="space-y-2">
+              {result.aiReview.items.map((item) => (
+                <div key={item.itemOrder} className="rounded border p-3 space-y-1">
+                  <p className="text-xs font-medium text-gray-700">Q{item.itemOrder}</p>
+                  {item.whatIsCorrect.length > 0 && (
+                    <p className="text-xs text-emerald-700">
+                      Correct: {item.whatIsCorrect.join("; ")}
+                    </p>
+                  )}
+                  {item.whatIsIncorrect.length > 0 && (
+                    <p className="text-xs text-red-600">
+                      Incorrect: {item.whatIsIncorrect.join("; ")}
+                    </p>
+                  )}
+                  {item.whatIsMissing.length > 0 && (
+                    <p className="text-xs text-[color:var(--color-blue-200)]">
+                      Missing: {item.whatIsMissing.join("; ")}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

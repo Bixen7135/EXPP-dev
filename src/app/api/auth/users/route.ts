@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  extractSessionRequestMetadata,
   resolveSession,
   resolveSessionByToken,
   setSessionCookie,
   upsertSessionWithUser,
 } from "@/lib/auth/session";
+import {
+  autoVerifyEmailIfEnabled,
+  normalizeEmailAddress,
+} from "@/lib/auth/email-verification";
 import { ok, fail, ValidationError, AppError, AuthError } from "@/lib/errors";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
@@ -24,7 +29,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const traceId = req.headers.get("x-trace-id") ?? crypto.randomUUID();
-  const currentSession = await resolveSession();
+  const requestMeta = extractSessionRequestMetadata(req.headers);
+  const currentSession = await resolveSession(requestMeta);
   if (!currentSession) {
     return NextResponse.json(fail("Unauthorized", "AUTH_ERROR", traceId), {
       status: 401,
@@ -44,8 +50,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       throw new ValidationError("password is required");
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: body.email },
+    const normalizedEmail = normalizeEmailAddress(body.email);
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: "insensitive",
+        },
+      },
     });
     const passwordValid =
       user != null && (await verifyPassword(body.password, user.passwordHash));
@@ -56,6 +68,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!user.isActive) {
       throw new AuthError("User is disabled");
     }
+    const emailVerifiedAt = await autoVerifyEmailIfEnabled({
+      userId: user.id,
+      emailVerifiedAt: user.emailVerifiedAt,
+    });
+
+    if (!emailVerifiedAt) {
+      throw new AppError(
+        "Please verify your email before signing in.",
+        "EMAIL_NOT_VERIFIED",
+        403
+      );
+    }
 
     const userContext = await prisma.account.findFirst({
       where: { userId: user.id, isActive: true },
@@ -65,10 +89,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       throw new AuthError("No active user context linked to this credential");
     }
 
-    const token = await upsertSessionWithUser(userContext.id);
+    const token = await upsertSessionWithUser(userContext.id, requestMeta);
     await setSessionCookie(token);
 
-    const updatedSession = await resolveSessionByToken(token);
+    const updatedSession = await resolveSessionByToken(token, { requestMeta });
     if (!updatedSession) {
       throw new AppError("Session update failed", "AUTH_ERROR", 500);
     }

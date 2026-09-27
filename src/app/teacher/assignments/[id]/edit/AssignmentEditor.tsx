@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEditorStore } from "@/modules/assignments/editor-store";
 import type { AssignmentDetail } from "@/modules/assignments/types";
@@ -84,13 +85,13 @@ export default function AssignmentEditor({ assignment }: Props) {
       const res = await fetch(`/api/assignments/${assignment.id}/publish`, { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        alert(data.error ?? "Publish failed");
+        markSaveError(data.error ?? "Publish failed");
         return;
       }
       setPublishConfirm(false);
       router.refresh();
     } catch {
-      alert("Network error");
+      markSaveError("Network error");
     }
   };
 
@@ -170,21 +171,21 @@ export default function AssignmentEditor({ assignment }: Props) {
                     disabled={item.order === 1 || isAssigned}
                     className="px-2 py-1 text-xs border rounded hover:bg-gray-50 disabled:opacity-30"
                   >
-                    ↑
+                    â†‘
                   </button>
                   <button
                     onClick={() => moveItem(item.order, "down")}
                     disabled={item.order === content.items.length || isAssigned}
                     className="px-2 py-1 text-xs border rounded hover:bg-gray-50 disabled:opacity-30"
                   >
-                    ↓
+                    â†“
                   </button>
                   <button
                     onClick={() => removeItem(item.order)}
                     disabled={isAssigned}
                     className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-30"
                   >
-                    ✕
+                    âœ•
                   </button>
                 </div>
               </div>
@@ -272,7 +273,7 @@ export default function AssignmentEditor({ assignment }: Props) {
         {!isAssigned && (
           <button
             onClick={handleAddItem}
-            className="w-full py-3 border-2 border-dashed rounded-lg text-sm text-gray-500 hover:border-blue-300 hover:text-blue-600"
+            className="w-full py-3 border-2 border-dashed rounded-lg text-sm text-gray-500 hover:border-[color:var(--color-blue-300)] hover:workspace-themed-link"
           >
             + Add Question
           </button>
@@ -297,9 +298,9 @@ export default function AssignmentEditor({ assignment }: Props) {
             <button
               onClick={handleSave}
               disabled={!isDirty || isSaving}
-              className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+              className="px-4 py-2 workspace-primary-action text-white rounded text-sm font-medium  disabled:opacity-40"
             >
-              {isSaving ? "Saving…" : "Save Version"}
+              {isSaving ? "Savingâ€¦" : "Save Version"}
             </button>
 
             {saveError && (
@@ -307,7 +308,7 @@ export default function AssignmentEditor({ assignment }: Props) {
             )}
 
             {isDirty && (
-              <p className="text-xs text-amber-600 ml-auto">Unsaved changes</p>
+              <p className="ml-auto text-xs text-[color:var(--color-blue-200)]">Unsaved changes</p>
             )}
           </div>
         </div>
@@ -349,15 +350,23 @@ export default function AssignmentEditor({ assignment }: Props) {
 
       {assignment.status === "PUBLISHABLE" && (
         <div className="p-4 border border-green-300 rounded-lg bg-green-50">
-          <p className="text-sm text-green-800 font-medium">
-            This assignment is publishable and ready for distribution → Phase 5
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-green-800 font-medium">
+              This assignment is ready to distribute.
+            </p>
+            <Link
+              href={`/teacher/assignments/${assignment.id}/assign`}
+              className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
+            >
+              Assign to Students
+            </Link>
+          </div>
         </div>
       )}
 
       {assignment.status === "ASSIGNED" && (
-        <div className="p-4 border border-blue-200 rounded-lg bg-blue-50">
-          <p className="text-sm text-blue-800 font-medium">
+        <div className="p-4 border border-[color:var(--color-blue-500)]/35 rounded-lg bg-[color:var(--color-blue-500)]/10">
+          <p className="text-sm text-[color:var(--color-blue-200)] font-medium">
             This assignment has been assigned to students and cannot be edited.
           </p>
         </div>

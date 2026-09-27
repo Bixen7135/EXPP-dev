@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+vi.mock("@/lib/audit/logger", () => ({
+  auditLog: vi.fn(),
+}));
+
+vi.mock("@/modules/analytics/insight-service", () => ({
+  enqueueInsightRecomputeForPublishedAttempt: vi.fn(),
+}));
+
 // â”€â”€ Mock Prisma â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -27,6 +35,8 @@ import {
   publishAssessment,
   getStudentResult,
 } from "@/modules/assessment/service";
+import { auditLog } from "@/lib/audit/logger";
+import { enqueueInsightRecomputeForPublishedAttempt } from "@/modules/analytics/insight-service";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 
 const mockPrisma = prisma as unknown as {
@@ -41,6 +51,10 @@ const mockPrisma = prisma as unknown as {
   assignmentDistribution: { findUnique: ReturnType<typeof vi.fn> };
   assignmentRecipient: { findMany: ReturnType<typeof vi.fn> };
 };
+
+const mockAuditLog = auditLog as unknown as ReturnType<typeof vi.fn>;
+const mockEnqueueInsightRecompute =
+  enqueueInsightRecomputeForPublishedAttempt as unknown as ReturnType<typeof vi.fn>;
 
 const fakeContent = {
   title: "Quiz",
@@ -220,7 +234,37 @@ describe("publishAssessment", () => {
         data: expect.objectContaining({ status: "PUBLISHED" }),
       })
     );
+    expect(mockEnqueueInsightRecompute).toHaveBeenCalledWith({
+      attemptId: "att_01",
+      traceId: "assessment_publish_att_01",
+    });
     expect(result.status).toBe("PUBLISHED");
+  });
+
+  it("keeps publish successful when insight enqueue fails", async () => {
+    mockPrisma.assessment.findUnique.mockResolvedValue({
+      ...fakeAssessment,
+      status: "REVIEWED",
+      manualGrade: 8,
+      maxGrade: 10,
+    });
+    mockPrisma.assessment.update.mockResolvedValue({
+      ...fakeAssessment,
+      status: "PUBLISHED",
+      publishedAt: new Date(),
+    });
+    mockEnqueueInsightRecompute.mockRejectedValueOnce(new Error("queue down"));
+
+    const result = await publishAssessment("att_01", "teacher_01");
+
+    expect(result.status).toBe("PUBLISHED");
+    expect(mockAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "analytics.insight_enqueue_failed",
+        entityType: "Assessment",
+        entityId: fakeAssessment.id,
+      })
+    );
   });
 
   it("blocks publishing AUTO_CHECKED assessment directly", async () => {
@@ -251,6 +295,20 @@ describe("getStudentResult", () => {
     manualGrade: 8,
     maxGrade: 10,
     comment: "Well done",
+    aiRecommendation: {
+      gradeRationale: "Strong reasoning and mostly correct steps.",
+      reviewPriority: ["Work on concise final statements"],
+      teacherPrivateNotes: ["Only for teacher"],
+      items: [
+        {
+          itemOrder: 1,
+          whatIsCorrect: ["Correctly identified the right option"],
+          whatIsIncorrect: [],
+          whatIsMissing: [],
+          teacherComment: "Good",
+        },
+      ],
+    },
     publishedAt: new Date(),
   };
 
@@ -264,6 +322,31 @@ describe("getStudentResult", () => {
     expect(result.grade).toBe(8);
     expect(result.maxGrade).toBe(10);
     expect(result.comment).toBe("Well done");
+  });
+
+  it("returns student-safe aiReview without teacher-only fields", async () => {
+    mockPrisma.attempt.findUnique.mockResolvedValue({
+      learnerAccountId: "student_01",
+      assessment: publishedAssessment,
+    });
+
+    const result = await getStudentResult("att_01", "student_01");
+
+    expect(result.aiReview).toEqual({
+      gradeRationale: "Strong reasoning and mostly correct steps.",
+      reviewPriority: ["Work on concise final statements"],
+      items: [
+        {
+          itemOrder: 1,
+          whatIsCorrect: ["Correctly identified the right option"],
+          whatIsIncorrect: [],
+          whatIsMissing: [],
+        },
+      ],
+    });
+    expect(
+      (result.aiReview as unknown as { teacherPrivateNotes?: unknown }).teacherPrivateNotes
+    ).toBeUndefined();
   });
 
   it("throws NotFoundError when result is not yet published", async () => {

@@ -24,6 +24,11 @@ export interface AssignmentContent {
   items: AssignmentItemContent[];
 }
 
+export interface AssignmentTag {
+  key: string;
+  value: string;
+}
+
 export interface AssignmentVersionSummary {
   id: string;
   versionNumber: number;
@@ -41,6 +46,7 @@ export interface AssignmentSummary {
   ownerAccountId: string;
   generationResultId: string | null;
   title: string;
+  tags: AssignmentTag[];
   status: AssignmentStatus;
   currentVersionId: string | null;
   createdAt: Date;
@@ -50,4 +56,10 @@ export interface AssignmentSummary {
 export interface AssignmentDetail extends AssignmentSummary {
   content: AssignmentContent;
   versions: AssignmentVersionSummary[];
+}
+
+export interface AssignmentListFilters {
+  search?: string;
+  tagKey?: string;
+  tagValue?: string;
 }

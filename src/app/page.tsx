@@ -6,7 +6,7 @@ export default async function Home() {
   const session = await resolveSession();
 
   if (!session) {
-    redirect("/login");
+    redirect("/sign-in");
   }
 
   if (session.domain === "GLOBAL") {
@@ -21,5 +21,5 @@ export default async function Home() {
     redirect("/student/dashboard");
   }
 
-  redirect("/login");
+  redirect("/dashboard");
 }

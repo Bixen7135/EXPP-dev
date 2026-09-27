@@ -6,12 +6,17 @@ const mockTx = {
   assignment: {
     create: vi.fn(),
     update: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
   },
   assignmentVersion: {
     create: vi.fn(),
     count: vi.fn(),
   },
   assignmentItem: {
+    deleteMany: vi.fn(),
+    createMany: vi.fn(),
+  },
+  assignmentTag: {
     deleteMany: vi.fn(),
     createMany: vi.fn(),
   },
@@ -36,6 +41,10 @@ vi.mock("@/lib/db/prisma", () => ({
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    assignmentTag: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
   },
 }));
 
@@ -53,6 +62,9 @@ import {
   restoreVersion,
   publishAssignment,
   deleteAssignment,
+  listWorksheetBank,
+  updateAssignmentTags,
+  duplicateAssignmentForBank,
 } from "@/modules/assignments/service";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 
@@ -71,6 +83,10 @@ const mockPrisma = prisma as unknown as {
     create: ReturnType<typeof vi.fn>;
   };
   assignmentItem: {
+    deleteMany: ReturnType<typeof vi.fn>;
+    createMany: ReturnType<typeof vi.fn>;
+  };
+  assignmentTag: {
     deleteMany: ReturnType<typeof vi.fn>;
     createMany: ReturnType<typeof vi.fn>;
   };
@@ -96,6 +112,7 @@ const fakeAssignment = {
   generationResultId: "genres_01",
   title: fakeContent.title,
   content: fakeContent,
+  tags: [],
   status: "DRAFT",
   currentVersionId: "ver_01",
   createdAt: new Date(),
@@ -433,6 +450,129 @@ describe("getAssignmentVersion", () => {
     mockPrisma.assignment.findUnique.mockResolvedValue(fakeAssignment);
     await expect(
       getAssignmentVersion("asgn_01", "ver_01", "other_teacher")
+    ).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe("listWorksheetBank", () => {
+  it("returns worksheet bank filtered by search and tags", async () => {
+    mockPrisma.assignment.findMany.mockResolvedValue([
+      {
+        ...fakeAssignment,
+        tags: [{ key: "topic", value: "algebra" }],
+      },
+      {
+        ...fakeAssignment,
+        id: "asgn_02",
+        title: "Biology Worksheet",
+        content: {
+          ...fakeContent,
+          instructions: "Bio",
+          items: [{ ...fakeContent.items[0], question: "What is a cell?" }],
+        },
+        tags: [{ key: "topic", value: "biology" }],
+      },
+    ]);
+
+    const result = await listWorksheetBank("teacher_01", {
+      search: "algebra",
+      tagKey: "topic",
+      tagValue: "alg",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("asgn_01");
+  });
+});
+
+describe("updateAssignmentTags", () => {
+  it("replaces assignment tags for owner", async () => {
+    mockPrisma.assignment.findUnique.mockResolvedValue({
+      ...fakeAssignment,
+      versions: [fakeVersion],
+      tags: [],
+    });
+    mockTx.assignmentTag.deleteMany.mockResolvedValue({ count: 1 });
+    mockTx.assignmentTag.createMany.mockResolvedValue({ count: 1 });
+    mockTx.assignment.findUniqueOrThrow.mockResolvedValue({
+      ...fakeAssignment,
+      versions: [fakeVersion],
+      tags: [{ key: "topic", value: "algebra" }],
+    });
+
+    const result = await updateAssignmentTags("asgn_01", "teacher_01", [
+      { key: "topic", value: "algebra" },
+    ]);
+
+    expect(mockTx.assignmentTag.deleteMany).toHaveBeenCalledWith({
+      where: { assignmentId: "asgn_01" },
+    });
+    expect(mockTx.assignmentTag.createMany).toHaveBeenCalledOnce();
+    expect(result.tags[0]).toEqual({ key: "topic", value: "algebra" });
+  });
+});
+
+describe("duplicateAssignmentForBank", () => {
+  beforeEach(() => {
+    mockPrisma.assignment.findUnique.mockResolvedValue({
+      ...fakeAssignment,
+      status: "ASSIGNED",
+      tags: [{ key: "topic", value: "algebra" }],
+      versions: [fakeVersion],
+    });
+    mockTx.assignment.create.mockResolvedValue({
+      ...fakeAssignment,
+      id: "asgn_copy",
+      generationResultId: null,
+      status: "DRAFT",
+      tags: [],
+    });
+    mockTx.assignmentVersion.create.mockResolvedValue({
+      ...fakeVersion,
+      id: "ver_copy_1",
+      assignmentId: "asgn_copy",
+      versionNumber: 1,
+    });
+    mockTx.assignmentItem.deleteMany.mockResolvedValue({ count: 1 });
+    mockTx.assignmentItem.createMany.mockResolvedValue({ count: 1 });
+    mockTx.assignmentTag.createMany.mockResolvedValue({ count: 1 });
+    mockTx.assignment.update.mockResolvedValue({
+      ...fakeAssignment,
+      id: "asgn_copy",
+      generationResultId: null,
+      status: "DRAFT",
+      currentVersionId: "ver_copy_1",
+      versions: [{ ...fakeVersion, id: "ver_copy_1", versionNumber: 1 }],
+      tags: [{ key: "topic", value: "algebra" }],
+    });
+  });
+
+  it("creates a DRAFT copy with copied tags", async () => {
+    const result = await duplicateAssignmentForBank("asgn_01", "teacher_01");
+
+    expect(mockTx.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "DRAFT",
+          generationResultId: null,
+        }),
+      })
+    );
+    expect(mockTx.assignmentTag.createMany).toHaveBeenCalledOnce();
+    expect(result.id).toBe("asgn_copy");
+    expect(result.status).toBe("DRAFT");
+  });
+
+  it("throws ForbiddenError for another teacher", async () => {
+    mockPrisma.assignment.findUnique.mockResolvedValue({
+      ...fakeAssignment,
+      ownerAccountId: "other_teacher",
+      versions: [fakeVersion],
+      tags: [],
+    });
+
+    await expect(
+      duplicateAssignmentForBank("asgn_01", "teacher_01")
     ).rejects.toThrow(ForbiddenError);
   });
 });

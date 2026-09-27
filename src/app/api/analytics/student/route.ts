@@ -12,6 +12,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!canAccessStudentWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
-  const analytics = await getStudentAnalytics(session.id);
+  const teacherId = req.nextUrl.searchParams.get("teacherId");
+  const subject = req.nextUrl.searchParams.get("subject");
+  const period = req.nextUrl.searchParams.get("period");
+
+  const analytics = await getStudentAnalytics(session.id, {
+    teacherId: teacherId && teacherId.trim() ? teacherId : null,
+    subject: subject && subject.trim() ? subject : null,
+    period: period === "all_time" || !period ? "all_time" : "all_time",
+  });
   return NextResponse.json(ok(analytics, traceId));
 }

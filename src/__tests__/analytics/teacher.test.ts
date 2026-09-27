@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-
-// ── Mock Prisma ────────────────────────────────────────────────────────────
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     assignmentDistribution: { findMany: vi.fn() },
+    assignmentRecipient: { findMany: vi.fn() },
+    studentAnalyticsInsight: { findMany: vi.fn() },
   },
 }));
 
@@ -17,9 +17,9 @@ import { getTeacherAnalytics } from "@/modules/analytics/teacher";
 
 const mockPrisma = prisma as unknown as {
   assignmentDistribution: { findMany: ReturnType<typeof vi.fn> };
+  assignmentRecipient: { findMany: ReturnType<typeof vi.fn> };
+  studentAnalyticsInsight: { findMany: ReturnType<typeof vi.fn> };
 };
-
-// ── Fixtures ───────────────────────────────────────────────────────────────
 
 const makeRecipient = (
   status: "PENDING" | "ACTIVE" | "SUBMITTED",
@@ -27,29 +27,57 @@ const makeRecipient = (
   helpBlocked = 0,
   assessmentPublished = false
 ) => ({
-  id: Math.random().toString(),
+  id: Math.random().toString(36).slice(2),
   status,
-  attempt: status === "PENDING" ? null : {
-    helpRequests: [
-      ...Array.from({ length: helpAllowed }, () => ({ status: "ALLOWED" })),
-      ...Array.from({ length: helpBlocked }, () => ({ status: "BLOCKED" })),
-    ],
-    assessment: assessmentPublished ? { status: "PUBLISHED" } : { status: "AUTO_CHECKED" },
-  },
+  attempt:
+    status === "PENDING"
+      ? null
+      : {
+          submittedAt: new Date("2026-01-02"),
+          helpRequests: [
+            ...Array.from({ length: helpAllowed }, () => ({ status: "ALLOWED" })),
+            ...Array.from({ length: helpBlocked }, () => ({ status: "BLOCKED" })),
+          ],
+          assessment: assessmentPublished
+            ? {
+                status: "PUBLISHED",
+                manualGrade: 8,
+                maxGrade: 10,
+                publishedAt: new Date("2026-01-03"),
+                aiRecommendation: null,
+                autoCheckResult: null,
+              }
+            : {
+                status: "AUTO_CHECKED",
+                manualGrade: null,
+                maxGrade: null,
+                publishedAt: null,
+                aiRecommendation: null,
+                autoCheckResult: null,
+              },
+        },
 });
 
 const makeDistribution = (recipients: ReturnType<typeof makeRecipient>[]) => ({
   id: "dist_01",
+  creatorAccountId: "teacher_01",
   aiHelpMode: "GUIDED",
   isGraded: false,
   status: "PRACTICE",
   deadline: null,
   createdAt: new Date("2026-01-01"),
-  assignment: { title: "Test Assignment" },
+  assignment: {
+    title: "Test Assignment",
+    tags: [],
+    generationResult: null,
+  },
   recipients,
 });
 
-// ── Tests ──────────────────────────────────────────────────────────────────
+function mockEmptyStudentInsights() {
+  mockPrisma.assignmentRecipient.findMany.mockResolvedValue([]);
+  mockPrisma.studentAnalyticsInsight.findMany.mockResolvedValue([]);
+}
 
 describe("getTeacherAnalytics", () => {
   it("counts recipients by status correctly", async () => {
@@ -61,6 +89,7 @@ describe("getTeacherAnalytics", () => {
         makeRecipient("SUBMITTED"),
       ]),
     ]);
+    mockEmptyStudentInsights();
 
     const result = await getTeacherAnalytics("teacher_01");
     const d = result.distributions[0];
@@ -78,6 +107,7 @@ describe("getTeacherAnalytics", () => {
         makeRecipient("SUBMITTED", 0, 2),
       ]),
     ]);
+    mockEmptyStudentInsights();
 
     const result = await getTeacherAnalytics("teacher_01");
     const d = result.distributions[0];
@@ -93,6 +123,7 @@ describe("getTeacherAnalytics", () => {
         makeRecipient("SUBMITTED", 0, 0, false),
       ]),
     ]);
+    mockEmptyStudentInsights();
 
     const result = await getTeacherAnalytics("teacher_01");
     expect(result.distributions[0].publishedResults).toBe(1);
@@ -103,6 +134,7 @@ describe("getTeacherAnalytics", () => {
       makeDistribution([makeRecipient("SUBMITTED"), makeRecipient("PENDING")]),
       makeDistribution([makeRecipient("ACTIVE")]),
     ]);
+    mockEmptyStudentInsights();
 
     const result = await getTeacherAnalytics("teacher_01");
 
@@ -113,18 +145,21 @@ describe("getTeacherAnalytics", () => {
 
   it("returns empty analytics when teacher has no distributions", async () => {
     mockPrisma.assignmentDistribution.findMany.mockResolvedValue([]);
+    mockEmptyStudentInsights();
 
     const result = await getTeacherAnalytics("teacher_01");
 
     expect(result.distributions).toHaveLength(0);
+    expect(result.students).toHaveLength(0);
     expect(result.totals.distributions).toBe(0);
     expect(result.totals.recipients).toBe(0);
   });
 
-  it("handles recipients with no attempt (PENDING) — no AI help counted", async () => {
+  it("handles recipients with no attempt (PENDING) - no AI help counted", async () => {
     mockPrisma.assignmentDistribution.findMany.mockResolvedValue([
       makeDistribution([makeRecipient("PENDING")]),
     ]);
+    mockEmptyStudentInsights();
 
     const result = await getTeacherAnalytics("teacher_01");
     const d = result.distributions[0];

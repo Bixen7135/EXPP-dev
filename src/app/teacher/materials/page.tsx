@@ -70,14 +70,14 @@ function fileTypeLabel(filename: string, mimeType: string): string {
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    READY: "bg-green-100 text-green-800",
-    PROCESSING: "bg-yellow-100 text-yellow-800",
-    ERROR: "bg-red-100 text-red-800",
+    READY: "bg-emerald-500/15 text-emerald-300",
+    PROCESSING: "bg-[color:var(--color-blue-500)]/10 text-[color:var(--color-blue-200)]",
+    ERROR: "bg-red-500/15 text-red-300",
   };
 
   return (
     <span
-      className={`px-2 py-0.5 rounded text-xs font-medium ${colors[status] ?? "bg-gray-100 text-gray-800"}`}
+      className={`px-2 py-0.5 rounded text-xs font-medium ${colors[status] ?? "bg-slate-800/70 text-slate-200"}`}
     >
       {status}
     </span>
@@ -86,9 +86,9 @@ function StatusBadge({ status }: { status: string }) {
 
 function BufferStatusBadge({ status }: { status: BufferStatus }) {
   const colors: Record<BufferStatus, string> = {
-    BUFFERED: "bg-blue-100 text-blue-800",
-    UPLOADING: "bg-yellow-100 text-yellow-800",
-    ERROR: "bg-red-100 text-red-800",
+    BUFFERED: "bg-[color:var(--color-blue-500)]/15 text-[color:var(--color-blue-200)]",
+    UPLOADING: "bg-[color:var(--color-blue-500)]/10 text-[color:var(--color-blue-200)]",
+    ERROR: "bg-red-500/15 text-red-300",
   };
 
   const labels: Record<BufferStatus, string> = {
@@ -126,6 +126,8 @@ export default function MaterialsPage() {
   const [showCreateFolderForm, setShowCreateFolderForm] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
+  const [deleteFolderConfirmId, setDeleteFolderConfirmId] = useState<string | null>(null);
+  const [deleteMaterialConfirmId, setDeleteMaterialConfirmId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingFolderName, setEditingFolderName] = useState("");
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -708,8 +710,7 @@ export default function MaterialsPage() {
   }
 
   async function handleDelete(id: string, title: string) {
-    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
-
+    setError(null);
     try {
       const res = await fetch(`/api/materials/${id}`, { method: "DELETE" });
       const json = await res.json();
@@ -717,8 +718,9 @@ export default function MaterialsPage() {
       setMaterials((prev) => prev.filter((m) => m.id !== id));
       setSelectedMaterialIds((prev) => prev.filter((itemId) => itemId !== id));
       setLastSelectedMaterialId((prev) => (prev === id ? null : prev));
+      setDeleteMaterialConfirmId(null);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Delete failed");
+      setError(e instanceof Error ? e.message : `Could not delete "${title}".`);
     }
   }
 
@@ -767,12 +769,6 @@ export default function MaterialsPage() {
   }
 
   async function handleDeleteFolder(folder: MaterialFolderSummary) {
-    const confirmation =
-      `Delete folder "${folder.path}"?\n\n` +
-      "Subfolders will also be deleted.\n" +
-      "Materials inside deleted folders will be moved to Root.";
-    if (!confirm(confirmation)) return;
-
     if (editingFolderId === folder.id) {
       cancelFolderRename();
     }
@@ -787,6 +783,7 @@ export default function MaterialsPage() {
       if (!json.success) throw new Error(json.error || "Failed to delete folder");
 
       await Promise.all([fetchFolders(), fetchMaterials()]);
+      setDeleteFolderConfirmId(null);
     } catch (e) {
       setFolderError(e instanceof Error ? e.message : "Failed to delete folder");
     } finally {
@@ -806,16 +803,16 @@ export default function MaterialsPage() {
     <main className="p-8 max-w-6xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Materials</h1>
 
-      <section className="p-5 border rounded-lg bg-gray-50 space-y-4">
+      <section className="p-5 border rounded-lg bg-slate-900/60 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Upload destination</p>
-            <p className="text-sm text-gray-600">{currentFolderPath}</p>
+            <p className="text-sm text-slate-400">{currentFolderPath}</p>
           </div>
           <button
             type="button"
             onClick={openFilePicker}
-            className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+            className="px-4 py-2 workspace-primary-action text-white rounded text-sm font-medium "
           >
             Select Files
           </button>
@@ -846,7 +843,7 @@ export default function MaterialsPage() {
         {bufferedCount > 0 ? (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-gray-600">Folder for all buffered:</span>
+              <span className="text-slate-400">Folder for all buffered:</span>
               <select
                 value={bufferBulkFolderId}
                 onChange={(e) => handleBulkBufferedFolderChange(e.target.value)}
@@ -862,10 +859,10 @@ export default function MaterialsPage() {
               </select>
             </div>
 
-            <div className="overflow-x-auto border rounded bg-white">
+            <div className="overflow-x-auto border rounded bg-slate-900">
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="border-b text-left text-gray-500">
+                  <tr className="border-b text-left text-slate-400">
                     <th className="py-2 px-3">Title</th>
                     <th className="py-2 px-3">File</th>
                     <th className="py-2 px-3">Destination Folder</th>
@@ -888,8 +885,8 @@ export default function MaterialsPage() {
                           className="w-full border rounded px-2 py-1"
                         />
                       </td>
-                      <td className="py-2 px-3 text-gray-700">{item.file.name}</td>
-                      <td className="py-2 px-3 text-gray-600 min-w-[240px]">
+                      <td className="py-2 px-3 text-slate-300">{item.file.name}</td>
+                      <td className="py-2 px-3 text-slate-400 min-w-[240px]">
                         <select
                           value={item.folderId && folderMap.has(item.folderId) ? item.folderId : ""}
                           onChange={(e) =>
@@ -906,11 +903,11 @@ export default function MaterialsPage() {
                             </option>
                           ))}
                         </select>
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-slate-400">
                           Current: {resolveFolderPath(item.folderId)}
                         </p>
                       </td>
-                      <td className="py-2 px-3 text-gray-700">{formatBytes(item.file.size)}</td>
+                      <td className="py-2 px-3 text-slate-300">{formatBytes(item.file.size)}</td>
                       <td className="py-2 px-3">
                         <BufferStatusBadge status={item.status} />
                       </td>
@@ -919,12 +916,12 @@ export default function MaterialsPage() {
                           type="button"
                           onClick={() => handleRemoveBuffered(item.id)}
                           disabled={uploading || item.status === "UPLOADING"}
-                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                          className="text-xs text-red-400 hover:underline disabled:opacity-50"
                         >
                           Remove
                         </button>
                         {item.error && (
-                          <p className="text-red-600 text-xs mt-1 text-left">{item.error}</p>
+                          <p className="text-red-400 text-xs mt-1 text-left">{item.error}</p>
                         )}
                       </td>
                     </tr>
@@ -934,14 +931,14 @@ export default function MaterialsPage() {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-600">No files buffered.</p>
+          <p className="text-sm text-slate-400">No files buffered.</p>
         )}
 
         <div aria-live="polite" className="space-y-1">
-          {bufferError && <p className="text-red-600 text-sm">{bufferError}</p>}
-          {bufferInfo && <p className="text-green-700 text-sm">{bufferInfo}</p>}
+          {bufferError && <p className="text-red-400 text-sm">{bufferError}</p>}
+          {bufferInfo && <p className="text-emerald-300 text-sm">{bufferInfo}</p>}
           {failedBufferedCount > 0 && (
-            <p className="text-amber-700 text-sm">
+            <p className="text-[color:var(--color-blue-200)] text-sm">
               {failedBufferedCount} file{failedBufferedCount === 1 ? "" : "s"} failed.
             </p>
           )}
@@ -952,7 +949,7 @@ export default function MaterialsPage() {
             type="button"
             onClick={handleFinalizeUpload}
             disabled={uploading || bufferedCount === 0}
-            className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 workspace-primary-action text-white rounded text-sm font-medium  disabled:opacity-50"
           >
             {uploadButtonLabel}
           </button>
@@ -960,7 +957,7 @@ export default function MaterialsPage() {
             type="button"
             onClick={handleClearBuffer}
             disabled={uploading || bufferedCount === 0}
-            className="px-4 py-2 bg-white border rounded text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+            className="px-4 py-2 bg-slate-900 border rounded text-sm font-medium hover:bg-slate-800/70 disabled:opacity-50"
           >
             Clear Buffer
           </button>
@@ -969,7 +966,7 @@ export default function MaterialsPage() {
 
       <section className="p-5 border rounded-lg space-y-4">
         <div className="overflow-x-auto">
-          <div className="inline-flex min-w-full items-center gap-1 rounded-xl border bg-white px-2 py-1.5 text-sm text-gray-700">
+          <div className="inline-flex min-w-full items-center gap-1 rounded-xl border bg-slate-900 px-2 py-1.5 text-sm text-slate-300">
             {explorerPath.map((node, index) => {
               const key = node.id ?? ROOT_DROP_KEY;
               const isCurrent = (node.id ?? null) === currentFolderId;
@@ -978,7 +975,7 @@ export default function MaterialsPage() {
               return (
                 <div key={key} className="flex items-center gap-1">
                   {index > 0 && (
-                    <span className="text-gray-400" aria-hidden="true">
+                    <span className="text-slate-500" aria-hidden="true">
                       <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
                         <path
                           d="M6 3.5L10 8l-4 4.5"
@@ -998,10 +995,10 @@ export default function MaterialsPage() {
                     onDrop={(e) => void handleFolderDrop(e, node.id)}
                     className={`rounded-md px-3 py-1.5 whitespace-nowrap transition-colors ${
                       isDropTarget
-                        ? "bg-blue-100 text-blue-800"
+                        ? "bg-[color:var(--color-blue-500)]/20 text-[color:var(--color-blue-200)]"
                         : isCurrent
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-gray-700 hover:bg-gray-100"
+                          ? "bg-[color:var(--color-blue-500)]/15 text-[color:var(--color-blue-100)]"
+                          : "text-slate-300 hover:bg-slate-800/70"
                     }`}
                   >
                     {node.label}
@@ -1018,8 +1015,10 @@ export default function MaterialsPage() {
               type="button"
               onClick={handleOpenCreateFolderForm}
               disabled={creatingFolder}
-              className={`relative h-9 w-9 shrink-0 rounded border text-blue-700 disabled:opacity-50 ${
-                showCreateFolderForm ? "bg-blue-50 border-blue-200" : "bg-white hover:bg-gray-50"
+              className={`relative h-9 w-9 shrink-0 rounded border workspace-themed-link disabled:opacity-50 ${
+                showCreateFolderForm
+                  ? "bg-[color:var(--color-blue-500)]/15 border-[color:var(--color-blue-500)]/35"
+                  : "bg-slate-900 hover:bg-slate-900/60"
               }`}
               aria-label="Create folder"
               title="Create folder"
@@ -1038,7 +1037,7 @@ export default function MaterialsPage() {
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-white">
+              <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full workspace-primary-action text-white">
                 <svg
                   viewBox="0 0 16 16"
                   fill="none"
@@ -1069,7 +1068,7 @@ export default function MaterialsPage() {
                 <button
                   type="submit"
                   disabled={creatingFolder}
-                  className="px-3 py-2 border rounded text-sm hover:bg-gray-50 disabled:opacity-50"
+                  className="px-3 py-2 border rounded text-sm hover:bg-slate-900/60 disabled:opacity-50"
                 >
                   {creatingFolder ? "Creating..." : "Create"}
                 </button>
@@ -1077,7 +1076,7 @@ export default function MaterialsPage() {
                   type="button"
                   onClick={handleCancelCreateFolderForm}
                   disabled={creatingFolder}
-                  className="px-3 py-2 border rounded text-sm hover:bg-gray-50 disabled:opacity-50"
+                  className="px-3 py-2 border rounded text-sm hover:bg-slate-900/60 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1101,29 +1100,29 @@ export default function MaterialsPage() {
             onClick={() =>
               setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
             }
-            className="px-3 py-2 border rounded text-sm hover:bg-gray-50"
+            className="px-3 py-2 border rounded text-sm hover:bg-slate-900/60"
           >
             {sortDirection === "asc" ? "Ascending" : "Descending"}
           </button>
         </div>
 
-        {folderError && <p className="text-red-600 text-sm">{folderError}</p>}
-        {moveError && <p className="text-red-600 text-sm">{moveError}</p>}
-        <p className="text-xs text-gray-500">
+        {folderError && <p className="text-red-400 text-sm">{folderError}</p>}
+        {moveError && <p className="text-red-400 text-sm">{moveError}</p>}
+        <p className="text-xs text-slate-400">
           Selected files: {selectedMaterialIds.length}.
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-400">
           Drag files or folders onto a folder row or path segment. Files support Ctrl/Cmd and Shift multi-select.
         </p>
 
-        {loading && <p className="text-gray-500">Loading...</p>}
-        {error && <p className="text-red-600">{error}</p>}
+        {loading && <p className="text-slate-400">Loading...</p>}
+        {error && <p className="text-red-400">{error}</p>}
 
         {!loading && !error && (
           <div className="overflow-x-auto border rounded">
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b text-left text-gray-500">
+                <tr className="border-b text-left text-slate-400">
                   <th className="py-2 px-3">Name</th>
                   <th className="py-2 px-3">Type</th>
                   <th className="py-2 px-3">Size</th>
@@ -1148,8 +1147,8 @@ export default function MaterialsPage() {
                     onDrop={(e) => void handleFolderDrop(e, folder.id)}
                     className={`border-b ${
                       dropTargetKey === folderDropKey(folder.id)
-                        ? "bg-blue-50"
-                        : "hover:bg-gray-50"
+                        ? "bg-[color:var(--color-blue-500)]/10"
+                        : "hover:bg-slate-900/60"
                     } ${draggedFolderId === folder.id ? "opacity-50" : ""} ${
                       movingFolderId === folder.id ? "opacity-50" : "cursor-grab"
                     }`}
@@ -1181,7 +1180,7 @@ export default function MaterialsPage() {
                           <button
                             type="submit"
                             disabled={renamingFolderId === folder.id}
-                            className="text-blue-700 hover:underline text-xs disabled:opacity-50"
+                            className="workspace-themed-link hover:underline text-xs disabled:opacity-50"
                           >
                             {renamingFolderId === folder.id ? "Saving..." : "Save"}
                           </button>
@@ -1189,7 +1188,7 @@ export default function MaterialsPage() {
                             type="button"
                             onClick={cancelFolderRename}
                             disabled={renamingFolderId === folder.id}
-                            className="text-gray-600 hover:underline text-xs disabled:opacity-50"
+                            className="text-slate-400 hover:underline text-xs disabled:opacity-50"
                           >
                             Cancel
                           </button>
@@ -1198,18 +1197,18 @@ export default function MaterialsPage() {
                         <button
                           type="button"
                           onClick={() => openFolder(folder.id)}
-                          className="text-blue-700 hover:underline"
+                          className="workspace-themed-link hover:underline"
                         >
                           {folder.name}
                         </button>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-gray-600">Folder</td>
-                    <td className="py-3 px-3 text-gray-400">-</td>
-                    <td className="py-3 px-3 text-gray-600">
+                    <td className="py-3 px-3 text-slate-400">Folder</td>
+                    <td className="py-3 px-3 text-slate-500">-</td>
+                    <td className="py-3 px-3 text-slate-400">
                       {new Date(folder.updatedAt).toLocaleString()}
                     </td>
-                    <td className="py-3 px-3 text-gray-400">-</td>
+                    <td className="py-3 px-3 text-slate-500">-</td>
                     <td className="py-3 px-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {editingFolderId !== folder.id && (
@@ -1221,23 +1220,44 @@ export default function MaterialsPage() {
                               renamingFolderId === folder.id ||
                               movingFolderId !== null
                             }
-                            className="text-blue-700 hover:underline text-xs disabled:opacity-50"
+                            className="workspace-themed-link hover:underline text-xs disabled:opacity-50"
                           >
                             Rename
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteFolder(folder)}
-                          disabled={
-                            deletingFolderId === folder.id ||
-                            renamingFolderId === folder.id ||
-                            movingFolderId !== null
-                          }
-                          className="text-red-600 hover:underline text-xs disabled:opacity-50"
-                        >
-                          {deletingFolderId === folder.id ? "Deleting..." : "Delete"}
-                        </button>
+                        {deleteFolderConfirmId === folder.id ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteFolder(folder)}
+                              disabled={deletingFolderId === folder.id}
+                              className="text-red-300 hover:underline text-xs disabled:opacity-50"
+                            >
+                              {deletingFolderId === folder.id ? "Deleting..." : "Confirm delete"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteFolderConfirmId(null)}
+                              disabled={deletingFolderId === folder.id}
+                              className="text-slate-300 hover:underline text-xs disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteFolderConfirmId(folder.id)}
+                            disabled={
+                              deletingFolderId === folder.id ||
+                              renamingFolderId === folder.id ||
+                              movingFolderId !== null
+                            }
+                            className="text-red-400 hover:underline text-xs disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1250,51 +1270,76 @@ export default function MaterialsPage() {
                     onClick={(e) => handleMaterialRowClick(e, material.id)}
                     onDragStart={(e) => handleMaterialDragStart(e, material.id)}
                     onDragEnd={handleMaterialDragEnd}
-                    className={`border-b hover:bg-gray-50 ${
+                    className={`border-b hover:bg-slate-900/60 ${
                       draggedMaterialSet.has(material.id) ? "opacity-40" : ""
                     } ${movingMaterialSet.has(material.id) ? "opacity-50" : "cursor-grab"} ${
-                      selectedMaterialSet.has(material.id) ? "bg-blue-50/70" : ""
+                      selectedMaterialSet.has(material.id) ? "bg-[color:var(--color-blue-500)]/15" : ""
                     }`}
                   >
                     <td className="py-3 px-3 font-medium">
                       <Link
                         href={`/teacher/materials/${material.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="hover:underline text-blue-700"
+                        className="hover:underline workspace-themed-link"
                       >
                         {material.title}
                       </Link>
-                      <p className="text-xs text-gray-500">{material.originalFilename}</p>
+                      <p className="text-xs text-slate-400">{material.originalFilename}</p>
                     </td>
-                    <td className="py-3 px-3 text-gray-600">
+                    <td className="py-3 px-3 text-slate-400">
                       {fileTypeLabel(material.originalFilename, material.mimeType)}
                     </td>
-                    <td className="py-3 px-3 text-gray-600">{formatBytes(material.fileSize)}</td>
-                    <td className="py-3 px-3 text-gray-600">
+                    <td className="py-3 px-3 text-slate-400">{formatBytes(material.fileSize)}</td>
+                    <td className="py-3 px-3 text-slate-400">
                       {new Date(material.updatedAt).toLocaleString()}
                     </td>
                     <td className="py-3 px-3">
                       <StatusBadge status={material.status} />
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleDelete(material.id, material.title);
-                        }}
-                        disabled={movingMaterialSet.has(material.id) || movingFolderId !== null}
-                        className="text-red-600 hover:underline text-xs disabled:opacity-50"
-                      >
-                        Delete
-                      </button>
+                      {deleteMaterialConfirmId === material.id ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDelete(material.id, material.title);
+                            }}
+                            className="text-red-300 hover:underline text-xs"
+                          >
+                            Confirm delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteMaterialConfirmId(null);
+                            }}
+                            className="text-slate-300 hover:underline text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteMaterialConfirmId(material.id);
+                          }}
+                          disabled={movingMaterialSet.has(material.id) || movingFolderId !== null}
+                          className="text-red-400 hover:underline text-xs disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
 
                 {childFolders.length === 0 && sortedMaterials.length === 0 && (
                   <tr>
-                    <td className="py-6 px-3 text-gray-500" colSpan={6}>
+                    <td className="py-6 px-3 text-slate-400" colSpan={6}>
                       This folder is empty.
                     </td>
                   </tr>

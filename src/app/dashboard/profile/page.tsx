@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolveSession } from "@/lib/auth/session";
+import { ExppBrand } from "@/lib/ui/expp-brand";
 import { UserAvatar } from "@/lib/ui/user-avatar";
 import { ProfilePictureEditor } from "../settings/ProfilePictureEditor";
 
@@ -25,10 +26,7 @@ function PublicProfileIcon() {
 export default async function DashboardProfilePage() {
   const session = await resolveSession();
   if (!session) {
-    redirect("/login");
-  }
-  if (session.domain !== "GLOBAL") {
-    redirect("/");
+    redirect("/sign-in");
   }
 
   return (
@@ -37,7 +35,8 @@ export default async function DashboardProfilePage() {
       style={{ fontFamily: PROFILE_FONT_STACK }}
     >
       <header className="border-b border-slate-800/90 bg-slate-950/90">
-        <div className="mx-auto flex h-[64px] max-w-[1320px] items-center px-[16px] lg:px-[24px]">
+        <div className="mx-auto flex h-[64px] max-w-[1320px] items-center gap-[14px] px-[16px] lg:px-[24px]">
+          <ExppBrand href="/dashboard" variant="header" />
           <h1 className="text-[14px] font-semibold tracking-[-0.01em] text-slate-100">Profile</h1>
         </div>
       </header>
@@ -65,15 +64,18 @@ export default async function DashboardProfilePage() {
         <div className="grid gap-[24px] lg:grid-cols-[320px_1fr]">
           <aside className="border-b border-slate-800 pb-[20px] lg:border-b-0 lg:border-r lg:pr-[24px]">
             <nav className="space-y-[4px]">
-              <Link
-                href="/dashboard/profile"
-                className="flex h-[44px] w-full items-center gap-[10px] rounded-[10px] bg-slate-800/80 px-[12px] text-left text-[14px] font-semibold text-slate-100"
-              >
-                <span className="text-slate-300">
-                  <PublicProfileIcon />
-                </span>
-                <span>Public Profile</span>
-              </Link>
+              <div className="relative h-[44px]">
+                <span className="absolute left-0 top-[8px] h-[28px] w-[6px] rounded-full bg-blue-500" />
+                <Link
+                  href="/dashboard/profile"
+                  className="ml-[10px] flex h-[44px] w-[calc(100%-10px)] items-center gap-[10px] rounded-[10px] bg-slate-800/80 px-[12px] text-left text-[14px] font-semibold text-slate-100"
+                >
+                  <span className="text-slate-300">
+                    <PublicProfileIcon />
+                  </span>
+                  <span>Public Profile</span>
+                </Link>
+              </div>
             </nav>
           </aside>
 

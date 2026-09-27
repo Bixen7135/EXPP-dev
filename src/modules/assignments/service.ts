@@ -1,14 +1,20 @@
 ﻿import { prisma } from "@/lib/db/prisma";
 import { NotFoundError, ForbiddenError, ValidationError } from "@/lib/errors";
+import { normalizeMaxScoreByQuestionType } from "@/lib/question-scoring";
 import type {
   AssignmentContent,
   RubricCriterion,
+  AssignmentTag,
   AssignmentStatus,
+  AssignmentListFilters,
   AssignmentSummary,
   AssignmentDetail,
   AssignmentVersionSummary,
   AssignmentVersionDetail,
 } from "./types";
+
+const MAX_TAG_KEY_LENGTH = 64;
+const MAX_TAG_VALUE_LENGTH = 255;
 
 // â”€â”€ Create â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -58,7 +64,7 @@ export async function createAssignment(opts: {
     const updated = await tx.assignment.update({
       where: { id: created.id },
       data: { currentVersionId: version.id },
-      include: { versions: true },
+      include: { versions: true, tags: true },
     });
 
     return updated;
@@ -74,9 +80,58 @@ export async function listAssignments(
 ): Promise<AssignmentSummary[]> {
   const rows = await prisma.assignment.findMany({
     where: { ownerAccountId },
+    include: { tags: true },
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toSummary);
+}
+
+export async function listWorksheetBank(
+  ownerAccountId: string,
+  filters: AssignmentListFilters = {}
+): Promise<AssignmentSummary[]> {
+  const normalizedTagKey = normalizeOptionalFilter(filters.tagKey);
+  const normalizedTagValue = normalizeOptionalFilter(filters.tagValue);
+  const normalizedSearch = normalizeOptionalFilter(filters.search)?.toLowerCase() ?? null;
+
+  const rows = await prisma.assignment.findMany({
+    where: {
+      ownerAccountId,
+      ...(normalizedTagKey || normalizedTagValue
+        ? {
+            tags: {
+              some: {
+                ...(normalizedTagKey
+                  ? { key: { contains: normalizedTagKey, mode: "insensitive" } }
+                  : {}),
+                ...(normalizedTagValue
+                  ? { value: { contains: normalizedTagValue, mode: "insensitive" } }
+                  : {}),
+              },
+            },
+          }
+        : {}),
+    },
+    include: { tags: true },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  const mapped = rows.map(toSummary);
+  if (!normalizedSearch) return mapped;
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+
+  return mapped.filter((assignment) => {
+    const content = rowById.get(assignment.id)?.content as AssignmentContent | undefined;
+    const items = Array.isArray(content?.items) ? content.items : [];
+    const contentText = `${content?.instructions ?? ""} ${items
+      .map((item) => `${item.question} ${item.expectedAnswer}`)
+      .join(" ")}`;
+    const tagsText = assignment.tags
+      .map((tag) => `${tag.key}:${tag.value}`)
+      .join(" ");
+    const text = `${assignment.title} ${contentText} ${tagsText}`.toLowerCase();
+    return text.includes(normalizedSearch);
+  });
 }
 
 export async function getAssignment(
@@ -85,7 +140,10 @@ export async function getAssignment(
 ): Promise<AssignmentDetail> {
   const row = await prisma.assignment.findUnique({
     where: { id },
-    include: { versions: { orderBy: { versionNumber: "desc" } } },
+    include: {
+      versions: { orderBy: { versionNumber: "desc" } },
+      tags: true,
+    },
   });
   if (!row) throw new NotFoundError("Assignment not found");
   if (row.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
@@ -117,6 +175,112 @@ export async function getAssignmentVersion(
     createdAt: version.createdAt,
     content: version.content as unknown as AssignmentContent,
   };
+}
+
+export async function updateAssignmentTags(
+  assignmentId: string,
+  ownerAccountId: string,
+  tags: AssignmentTag[]
+): Promise<AssignmentDetail> {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+  });
+  if (!assignment) throw new NotFoundError("Assignment not found");
+  if (assignment.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
+
+  const normalizedTags = normalizeAssignmentTags(tags);
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.assignmentTag.deleteMany({ where: { assignmentId } });
+    if (normalizedTags.length > 0) {
+      await tx.assignmentTag.createMany({
+        data: normalizedTags.map((tag) => ({
+          assignmentId,
+          key: tag.key,
+          value: tag.value,
+        })),
+      });
+    }
+
+    return tx.assignment.findUniqueOrThrow({
+      where: { id: assignmentId },
+      include: {
+        versions: { orderBy: { versionNumber: "desc" } },
+        tags: true,
+      },
+    });
+  });
+
+  return toDetail(updated, updated.versions.map(toVersionSummary));
+}
+
+export async function duplicateAssignmentForBank(
+  assignmentId: string,
+  ownerAccountId: string
+): Promise<AssignmentDetail> {
+  const source = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    include: {
+      versions: { orderBy: { versionNumber: "desc" } },
+      tags: true,
+    },
+  });
+  if (!source) throw new NotFoundError("Assignment not found");
+  if (source.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
+
+  const content = normalizeAssignmentContent(
+    source.content as unknown as AssignmentContent
+  );
+  const copiedTags = normalizeAssignmentTags(
+    source.tags.map((tag) => ({ key: tag.key, value: tag.value }))
+  );
+
+  const duplicated = await prisma.$transaction(async (tx) => {
+    const created = await tx.assignment.create({
+      data: {
+        ownerAccountId,
+        organizationId: source.organizationId,
+        institutionId: source.institutionId,
+        generationResultId: null,
+        title: `${content.title} (Copy)`,
+        content: content as object,
+        status: "DRAFT",
+      },
+    });
+
+    const version = await tx.assignmentVersion.create({
+      data: {
+        assignmentId: created.id,
+        versionNumber: 1,
+        content: content as object,
+        authorAccountId: ownerAccountId,
+        changeDescription: `Duplicated from assignment ${source.id}`,
+      },
+    });
+
+    await syncItems(tx, created.id, content.items);
+
+    if (copiedTags.length > 0) {
+      await tx.assignmentTag.createMany({
+        data: copiedTags.map((tag) => ({
+          assignmentId: created.id,
+          key: tag.key,
+          value: tag.value,
+        })),
+      });
+    }
+
+    return tx.assignment.update({
+      where: { id: created.id },
+      data: { currentVersionId: version.id },
+      include: {
+        versions: { orderBy: { versionNumber: "desc" } },
+        tags: true,
+      },
+    });
+  });
+
+  return toDetail(duplicated, duplicated.versions.map(toVersionSummary));
 }
 
 // â”€â”€ Update (creates a new version) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -162,7 +326,10 @@ export async function updateAssignment(
         // If it was PUBLISHABLE and edited, revert to DRAFT (content changed)
         status: assignment.status === "PUBLISHABLE" ? "DRAFT" : assignment.status,
       },
-      include: { versions: { orderBy: { versionNumber: "desc" } } },
+      include: {
+        versions: { orderBy: { versionNumber: "desc" } },
+        tags: true,
+      },
     });
 
     return result;
@@ -219,7 +386,10 @@ export async function restoreVersion(
         currentVersionId: newVersion.id,
         status: "DRAFT",
       },
-      include: { versions: { orderBy: { versionNumber: "desc" } } },
+      include: {
+        versions: { orderBy: { versionNumber: "desc" } },
+        tags: true,
+      },
     });
 
     return result;
@@ -236,7 +406,10 @@ export async function publishAssignment(
 ): Promise<AssignmentDetail> {
   const assignment = await prisma.assignment.findUnique({
     where: { id },
-    include: { versions: { orderBy: { versionNumber: "desc" } } },
+    include: {
+      versions: { orderBy: { versionNumber: "desc" } },
+      tags: true,
+    },
   });
   if (!assignment) throw new NotFoundError("Assignment not found");
   if (assignment.ownerAccountId !== ownerAccountId) throw new ForbiddenError();
@@ -248,7 +421,10 @@ export async function publishAssignment(
   const updated = await prisma.assignment.update({
     where: { id },
     data: { status: "PUBLISHABLE" },
-    include: { versions: { orderBy: { versionNumber: "desc" } } },
+    include: {
+      versions: { orderBy: { versionNumber: "desc" } },
+      tags: true,
+    },
   });
 
   return toDetail(updated, updated.versions.map(toVersionSummary));
@@ -296,7 +472,7 @@ async function syncItems(
         } as object),
         expectedAnswer: ({
           text: item.expectedAnswer,
-          maxScore: item.maxScore ?? 1,
+          maxScore: normalizeMaxScoreByQuestionType(item.type, item.maxScore),
         } as object),
       })),
     });
@@ -313,6 +489,7 @@ type AssignmentRow = {
   currentVersionId: string | null;
   createdAt: Date;
   updatedAt: Date;
+  tags?: Array<{ key: string; value: string }>;
 };
 
 type VersionRow = {
@@ -329,6 +506,7 @@ function toSummary(row: AssignmentRow): AssignmentSummary {
     ownerAccountId: row.ownerAccountId,
     generationResultId: row.generationResultId,
     title: row.title,
+    tags: (row.tags ?? []).map((tag) => ({ key: tag.key, value: tag.value })),
     status: row.status as AssignmentStatus,
     currentVersionId: row.currentVersionId,
     createdAt: row.createdAt,
@@ -365,9 +543,7 @@ function normalizeAssignmentContent(content: AssignmentContent): AssignmentConte
 }
 
 function normalizeItem(item: AssignmentContent["items"][number]): AssignmentContent["items"][number] {
-  const maxScore = Number.isFinite(item.maxScore) && (item.maxScore ?? 0) > 0
-    ? Number(item.maxScore)
-    : 1;
+  const maxScore = normalizeMaxScoreByQuestionType(item.type, item.maxScore);
 
   const rubricCriteria = normalizeRubricCriteria(
     item.rubricCriteria,
@@ -430,6 +606,40 @@ function normalizeRubricCriteria(
     ...criterion,
     weight: Number((criterion.weight * scale).toFixed(2)),
   }));
+}
+
+function normalizeAssignmentTags(tags: AssignmentTag[]): AssignmentTag[] {
+  const dedup = new Set<string>();
+  const normalized: AssignmentTag[] = [];
+
+  for (const tag of tags) {
+    const key = `${tag?.key ?? ""}`.trim();
+    const value = `${tag?.value ?? ""}`.trim();
+    if (!key || !value) {
+      throw new ValidationError("tags must include key and value");
+    }
+    if (key.length > MAX_TAG_KEY_LENGTH) {
+      throw new ValidationError(`tag key must be <= ${MAX_TAG_KEY_LENGTH} characters`);
+    }
+    if (value.length > MAX_TAG_VALUE_LENGTH) {
+      throw new ValidationError(
+        `tag value must be <= ${MAX_TAG_VALUE_LENGTH} characters`
+      );
+    }
+
+    const signature = `${key.toLowerCase()}::${value.toLowerCase()}`;
+    if (dedup.has(signature)) continue;
+    dedup.add(signature);
+    normalized.push({ key, value });
+  }
+
+  return normalized;
+}
+
+function normalizeOptionalFilter(value: string | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 

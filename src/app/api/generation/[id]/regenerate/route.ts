@@ -35,7 +35,9 @@ export async function POST(
     const result = await regenerateRequest(id, session.id, newConstraints);
 
     await auditLog({
-      userId: session.id,
+      userId: session.userId,
+      actorAccountId: session.id,
+      organizationId: session.organizationId ?? undefined,
       action: "generation.request.regenerated",
       entityType: "generation_request",
       entityId: id,
@@ -43,7 +45,7 @@ export async function POST(
       traceId,
     });
 
-    return NextResponse.json(ok(result, traceId));
+    return NextResponse.json(ok(result, traceId), { status: 202 });
   } catch (err) {
     if (err instanceof AppError) {
       return NextResponse.json(

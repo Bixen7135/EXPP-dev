@@ -27,9 +27,9 @@ describe("matchRouteRule", () => {
   });
 
   it("returns null for unprotected paths", () => {
-    expect(matchRouteRule("/login")).toBeNull();
-    expect(matchRouteRule("/register")).toBeNull();
-    expect(matchRouteRule("/api/auth/login")).toBeNull();
+    expect(matchRouteRule("/sign-in")).toBeNull();
+    expect(matchRouteRule("/sign-up")).toBeNull();
+    expect(matchRouteRule("/api/auth/sign-in")).toBeNull();
   });
 });
 

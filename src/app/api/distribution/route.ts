@@ -32,6 +32,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       distributionStatus,
       isGraded,
       aiHelpMode,
+      restrictedMode,
       recipientSources,
       recipientUserIds,
       includeUserIds,
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         recipientCount: distribution.recipients.length,
         aiHelpMode,
         distributionStatus,
+        restrictedMode: restrictedMode === true,
       },
       traceId,
     });

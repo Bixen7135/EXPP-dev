@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolveSession } from "@/lib/auth/session";
 import { hasGoogleConnection } from "@/lib/auth/google-connection";
+import { ExppBrand } from "@/lib/ui/expp-brand";
 import { UserAvatar } from "@/lib/ui/user-avatar";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 const SETTINGS_FONT_STACK =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif';
@@ -173,12 +175,10 @@ function PasswordMethodIcon() {
 }
 
 export default async function DashboardPasswordAuthenticationSettingsPage() {
+  const showUpcomingSettings = process.env.NODE_ENV === "production";
   const session = await resolveSession();
   if (!session) {
-    redirect("/login");
-  }
-  if (session.domain !== "GLOBAL") {
-    redirect("/");
+    redirect("/sign-in");
   }
   const isGoogleConnected = hasGoogleConnection(session);
 
@@ -188,7 +188,8 @@ export default async function DashboardPasswordAuthenticationSettingsPage() {
       style={{ fontFamily: SETTINGS_FONT_STACK }}
     >
       <header className="border-b border-slate-800/90 bg-slate-950/90">
-        <div className="mx-auto flex h-[64px] max-w-[1320px] items-center px-[16px] lg:px-[24px]">
+        <div className="mx-auto flex h-[64px] max-w-[1320px] items-center gap-[14px] px-[16px] lg:px-[24px]">
+          <ExppBrand href="/dashboard" variant="header" />
           <h1 className="text-[14px] font-semibold tracking-[-0.01em] text-slate-100">Settings</h1>
         </div>
       </header>
@@ -226,35 +227,39 @@ export default async function DashboardPasswordAuthenticationSettingsPage() {
                 <span>Account</span>
               </Link>
 
-              <button
-                type="button"
+              <Link
+                href="/dashboard/settings/appearance"
                 className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
               >
                 <span className="text-slate-400">
                   <AppearanceIcon />
                 </span>
                 <span>Appearance</span>
-              </button>
+              </Link>
 
-              <button
-                type="button"
-                className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
-              >
-                <span className="text-slate-400">
-                  <AccessibilityIcon />
-                </span>
-                <span>Accessibility</span>
-              </button>
+              {showUpcomingSettings && (
+                <>
+                  <button
+                    type="button"
+                    className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
+                  >
+                    <span className="text-slate-400">
+                      <AccessibilityIcon />
+                    </span>
+                    <span>Accessibility</span>
+                  </button>
 
-              <button
-                type="button"
-                className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
-              >
-                <span className="text-slate-400">
-                  <NotificationsIcon />
-                </span>
-                <span>Notifications</span>
-              </button>
+                  <button
+                    type="button"
+                    className="flex h-[40px] w-full items-center gap-[10px] rounded-[10px] px-[12px] text-left text-[14px] text-slate-200 transition-colors hover:bg-slate-800/60"
+                  >
+                    <span className="text-slate-400">
+                      <NotificationsIcon />
+                    </span>
+                    <span>Notifications</span>
+                  </button>
+                </>
+              )}
             </nav>
 
             <div className="mt-[16px] border-t border-slate-800 pt-[16px]">
@@ -271,15 +276,18 @@ export default async function DashboardPasswordAuthenticationSettingsPage() {
                   <span>Emails</span>
                 </Link>
 
-                <Link
-                  href="/dashboard/settings/password-authentication"
-                  className="flex h-[44px] w-full items-center gap-[10px] rounded-[10px] bg-slate-800/80 px-[12px] text-left text-[14px] font-semibold text-slate-100"
-                >
-                  <span className="text-slate-300">
-                    <SessionsIcon />
-                  </span>
-                  <span>Password and authentication</span>
-                </Link>
+                <div className="relative h-[44px]">
+                  <span className="absolute left-0 top-[8px] h-[28px] w-[6px] rounded-full bg-blue-500" />
+                  <Link
+                    href="/dashboard/settings/password-authentication"
+                    className="ml-[10px] flex h-[44px] w-[calc(100%-10px)] items-center gap-[10px] rounded-[10px] bg-slate-800/80 px-[12px] text-left text-[14px] font-semibold text-slate-100"
+                  >
+                    <span className="text-slate-300">
+                      <SessionsIcon />
+                    </span>
+                    <span>Password and authentication</span>
+                  </Link>
+                </div>
 
                 <Link
                   href="/dashboard/settings/sessions"
@@ -309,12 +317,12 @@ export default async function DashboardPasswordAuthenticationSettingsPage() {
                       <p className="pt-[8px] text-[14px] leading-none text-slate-400">1 verified email configured</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
+                  <Link
+                    href="/dashboard/settings/emails"
                     className="inline-flex h-[50px] w-[90px] items-center justify-center rounded-[16px] border border-slate-600/90 bg-slate-800/70 px-[26px] text-[14px] font-medium leading-none text-slate-100 transition-colors hover:bg-slate-700/75 sm:ml-auto"
                   >
                     Manage
-                  </button>
+                  </Link>
                 </div>
               </div>
 
@@ -331,12 +339,7 @@ export default async function DashboardPasswordAuthenticationSettingsPage() {
                       <p className="pt-[8px] text-[14px] leading-none text-slate-400">Configured</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="inline-flex h-[50px] w-[90px] items-center justify-center rounded-[16px] border border-slate-600/90 bg-slate-800/70 px-[26px] text-[14px] font-medium leading-none text-slate-100 transition-colors hover:bg-slate-700/75 sm:ml-auto"
-                  >
-                    Change
-                  </button>
+                  <ChangePasswordDialog />
                 </div>
               </div>
 

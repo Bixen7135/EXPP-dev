@@ -10,15 +10,15 @@ type Props = { params: Promise<{ id: string }> };
 const ASSESSMENT_STATUS_COLORS: Record<string, string> = {
   null: "bg-gray-100 text-gray-500",
   PENDING: "bg-gray-100 text-gray-500",
-  AUTO_CHECKED: "bg-yellow-100 text-yellow-700",
-  REVIEWED: "bg-blue-100 text-blue-700",
+  AUTO_CHECKED: "bg-[color:var(--color-blue-500)]/10 text-[color:var(--color-blue-200)]",
+  REVIEWED: "bg-[color:var(--color-blue-500)]/12 text-[color:var(--color-blue-200)]",
   PUBLISHED: "bg-green-100 text-green-700",
 };
 
 const AI_STATUS_COLORS: Record<string, string> = {
   null: "bg-gray-100 text-gray-500",
   NOT_STARTED: "bg-gray-100 text-gray-600",
-  QUEUED: "bg-amber-100 text-amber-700",
+  QUEUED: "bg-slate-800 text-slate-300",
   PROCESSING: "bg-indigo-100 text-indigo-700",
   READY: "bg-emerald-100 text-emerald-700",
   FAILED: "bg-red-100 text-red-700",

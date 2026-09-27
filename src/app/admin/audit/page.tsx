@@ -54,7 +54,7 @@ export default async function AdminAuditPage({ searchParams }: Props) {
           <input
             name="action"
             defaultValue={sp.action ?? ""}
-            placeholder="e.g. auth.login"
+            placeholder="e.g. auth.sign_in"
             className="px-2 py-1 border rounded text-sm w-44"
           />
         </div>

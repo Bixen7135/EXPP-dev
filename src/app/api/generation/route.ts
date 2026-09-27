@@ -87,7 +87,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       traceId,
     });
 
-    return NextResponse.json(ok(result, traceId), { status: 201 });
+    return NextResponse.json(ok(result, traceId), { status: 202 });
   } catch (err) {
     if (err instanceof AppError) {
       return NextResponse.json(

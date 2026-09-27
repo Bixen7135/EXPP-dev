@@ -96,7 +96,7 @@ export default async function ReviewAttemptPage({ params }: Props) {
                     <span className="font-medium text-gray-700">{item.expectedAnswer}</span>
                     {studentAnswer && (
                       <span className={`ml-2 font-medium ${isCorrect ? "text-green-600" : "text-red-500"}`}>
-                        {isCorrect ? "âœ“" : "âœ—"}
+                        {isCorrect ? "\u2713" : "\u2717"}
                       </span>
                     )}
                   </p>

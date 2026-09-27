@@ -4,12 +4,8 @@ import { resolveSession } from "@/lib/auth/session";
 export default async function DashboardSettingsPage() {
   const session = await resolveSession();
   if (!session) {
-    redirect("/login");
-  }
-  if (session.domain !== "GLOBAL") {
-    redirect("/");
+    redirect("/sign-in");
   }
 
   redirect("/dashboard/settings/account");
 }
-

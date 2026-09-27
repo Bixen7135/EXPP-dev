@@ -12,6 +12,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!canAccessTeacherWorkspace(session))
     return NextResponse.json(fail("Forbidden", "FORBIDDEN", traceId), { status: 403 });
 
-  const analytics = await getTeacherAnalytics(session.id);
+  const subject = req.nextUrl.searchParams.get("subject");
+  const analytics = await getTeacherAnalytics(session.id, {
+    subject: subject && subject.trim() ? subject : null,
+    period: "all_time",
+  });
   return NextResponse.json(ok(analytics, traceId));
 }

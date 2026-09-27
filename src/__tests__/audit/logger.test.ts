@@ -20,7 +20,7 @@ describe("auditLog", () => {
   it("writes an audit event with all fields", async () => {
     await auditLog({
       userId: "user-1",
-      action: "auth.login",
+      action: "auth.sign_in",
       entityType: "user",
       entityId: "user-1",
       context: { ip: "1.2.3.4" },
@@ -33,7 +33,7 @@ describe("auditLog", () => {
         actorAccountId: null,
         organizationId: null,
         institutionId: null,
-        action: "auth.login",
+        action: "auth.sign_in",
         entityType: "user",
         entityId: "user-1",
         context: { ip: "1.2.3.4" },
@@ -43,9 +43,9 @@ describe("auditLog", () => {
   });
 
   it("writes event without userId (anonymous)", async () => {
-    await auditLog({ action: "auth.login_failed", traceId: "trace-xyz" });
+    await auditLog({ action: "auth.sign_in_failed", traceId: "trace-xyz" });
     expect(prisma.auditEvent.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ userId: null, action: "auth.login_failed" }),
+      data: expect.objectContaining({ userId: null, action: "auth.sign_in_failed" }),
     });
   });
 
@@ -54,7 +54,7 @@ describe("auditLog", () => {
       new Error("DB down")
     );
     await expect(
-      auditLog({ action: "auth.login", traceId: "t" })
+      auditLog({ action: "auth.sign_in", traceId: "t" })
     ).resolves.not.toThrow();
   });
 });

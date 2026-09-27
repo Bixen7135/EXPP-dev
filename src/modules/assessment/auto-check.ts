@@ -1,12 +1,10 @@
-﻿import type { AssignmentItemContent } from "@/modules/assignments/types";
+import { normalizeMaxScoreByQuestionType } from "@/lib/question-scoring";
+import type { AssignmentItemContent } from "@/modules/assignments/types";
 import type { AttemptAnswer } from "@/modules/completion/types";
 import type { AutoCheckResult, ItemCheckResult } from "./types";
 
 function getItemMaxScore(item: AssignmentItemContent): number {
-  if (typeof item.maxScore === "number" && Number.isFinite(item.maxScore) && item.maxScore > 0) {
-    return item.maxScore;
-  }
-  return 1;
+  return normalizeMaxScoreByQuestionType(item.type, item.maxScore);
 }
 
 /**

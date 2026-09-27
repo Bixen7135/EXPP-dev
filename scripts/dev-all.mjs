@@ -41,6 +41,7 @@ function buildLocalEnv() {
   const env = { ...process.env };
   const postgresPort = env.POSTGRES_PORT || "5433";
   const redisPort = env.REDIS_PORT || "6380";
+  const smtpPort = env.SMTP_PORT || "1025";
 
   if (!env.DATABASE_URL) {
     env.DATABASE_URL = `postgresql://expp:expp_secret@localhost:${postgresPort}/expp`;
@@ -53,6 +54,41 @@ function buildLocalEnv() {
     env.REDIS_URL = `redis://localhost:${redisPort}`;
     console.log(
       `${SCRIPT_TAG} REDIS_URL is not set; using local docker default (${env.REDIS_URL}).`
+    );
+  }
+
+  if (!env.SMTP_HOST) {
+    env.SMTP_HOST = "localhost";
+    console.log(
+      `${SCRIPT_TAG} SMTP_HOST is not set; using local mailpit default (${env.SMTP_HOST}).`
+    );
+  }
+
+  if (!env.SMTP_PORT) {
+    env.SMTP_PORT = smtpPort;
+    console.log(
+      `${SCRIPT_TAG} SMTP_PORT is not set; using local mailpit default (${env.SMTP_PORT}).`
+    );
+  }
+
+  if (!env.SMTP_SECURE) {
+    env.SMTP_SECURE = "false";
+    console.log(
+      `${SCRIPT_TAG} SMTP_SECURE is not set; using local mailpit default (${env.SMTP_SECURE}).`
+    );
+  }
+
+  if (!env.SMTP_FROM) {
+    env.SMTP_FROM = "EXPP <no-reply@expp.local>";
+    console.log(
+      `${SCRIPT_TAG} SMTP_FROM is not set; using local mailpit default (${env.SMTP_FROM}).`
+    );
+  }
+
+  if (!env.AUTH_AUTO_VERIFY_EMAIL) {
+    env.AUTH_AUTO_VERIFY_EMAIL = "true";
+    console.log(
+      `${SCRIPT_TAG} AUTH_AUTO_VERIFY_EMAIL is not set; defaulting to (${env.AUTH_AUTO_VERIFY_EMAIL}).`
     );
   }
 
@@ -103,13 +139,14 @@ function main() {
 
   runOrFail(
     "docker",
-    ["compose", "up", "-d", "--wait", "db", "redis"],
-    "docker compose up (db/redis)",
+    ["compose", "up", "-d", "--wait", "db", "redis", "mailpit"],
+    "docker compose up (db/redis/mailpit)",
     { env }
   );
 
   runOrFail("bun", ["run", "db:generate"], "Prisma generate", { env });
   runOrFail("bun", ["run", "db:push"], "Prisma db push", { env });
+  runOrFail("bun", ["run", "dev:seed-users"], "Development user seed", { env });
   runOrFail("bun", ["run", "dev"], "Next.js dev server", { env });
 }
 

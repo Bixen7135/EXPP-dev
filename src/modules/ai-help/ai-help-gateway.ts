@@ -68,6 +68,8 @@ export async function requestAiHelp(opts: AiHelpRequest): Promise<AiHelpResponse
   }
 
   const result = await aiGenerate({
+    label: `ai_help.${opts.mode.toLowerCase()}`,
+    traceId: opts.traceId,
     messages: [
       { role: "system", content: systemPrompt },
       {

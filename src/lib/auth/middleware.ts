@@ -12,17 +12,17 @@ const ROUTE_RULES: RouteRule[] = [
   {
     prefix: "/teacher",
     requiredPermissions: ["workspace.teacher", "workspace.admin"],
-    redirectTo: "/login",
+    redirectTo: "/sign-in",
   },
   {
     prefix: "/student",
     requiredPermissions: ["workspace.student"],
-    redirectTo: "/login",
+    redirectTo: "/sign-in",
   },
   {
     prefix: "/admin",
     requiredPermissions: ["workspace.admin"],
-    redirectTo: "/login",
+    redirectTo: "/sign-in",
   },
 ];
 

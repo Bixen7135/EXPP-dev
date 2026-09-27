@@ -45,6 +45,8 @@ export function DeleteAccountDialog({ username, email }: DeleteAccountDialogProp
   const [identifier, setIdentifier] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [attempted, setAttempted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const allowedIdentifiers = useMemo(() => {
     return [username, email]
@@ -79,17 +81,49 @@ export function DeleteAccountDialog({ username, email }: DeleteAccountDialogProp
     setIdentifier("");
     setConfirmation("");
     setAttempted(false);
+    setSubmitError(null);
+    setIsSubmitting(false);
     setIsOpen(true);
   }
 
   function closeDialog() {
+    if (isSubmitting) return;
     setIsOpen(false);
   }
 
-  function handleConfirmDeletion() {
+  async function handleConfirmDeletion() {
     setAttempted(true);
     if (!canSubmit) return;
-    setIsOpen(false);
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const response = await fetch("/api/auth/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: identifier.trim(),
+          confirmation: confirmation.trim(),
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { success?: boolean; error?: string }
+        | null;
+
+      if (!response.ok || payload?.success !== true) {
+        setSubmitError(payload?.error ?? "Failed to delete account. Please try again.");
+        return;
+      }
+
+      setIsOpen(false);
+      window.location.href = "/sign-up";
+    } catch {
+      setSubmitError("Failed to delete account. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -195,6 +229,7 @@ export function DeleteAccountDialog({ username, email }: DeleteAccountDialogProp
                 <button
                   type="button"
                   onClick={closeDialog}
+                  disabled={isSubmitting}
                   className="inline-flex h-[48px] items-center justify-center rounded-[12px] border border-slate-700 bg-slate-900/70 px-6 text-[15px] font-medium text-slate-200 transition-colors hover:bg-slate-800"
                 >
                   Cancel
@@ -203,11 +238,12 @@ export function DeleteAccountDialog({ username, email }: DeleteAccountDialogProp
                   type="button"
                   onClick={handleConfirmDeletion}
                   className="inline-flex h-[48px] items-center justify-center rounded-[12px] border border-slate-700 bg-slate-900/70 px-7 text-[15px] font-medium text-slate-200 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-200 disabled:hover:bg-slate-900/70"
-                  disabled={!canSubmit}
+                  disabled={!canSubmit || isSubmitting}
                 >
-                  Permanently delete EXPP account
+                  {isSubmitting ? "Deleting..." : "Permanently delete EXPP account"}
                 </button>
               </div>
+              {submitError ? <p className="pt-3 text-[13px] text-red-300">{submitError}</p> : null}
             </div>
           </section>
         </div>

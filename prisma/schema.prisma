@@ -11,6 +11,36 @@ enum AccountDomain {
   ORGANIZATION
 }
 
+enum ThemeMode {
+  SYSTEM
+  LIGHT
+  DARK
+  SINGLE_THEME
+}
+
+enum LightThemePreset {
+  DEFAULT
+  COLORBLIND
+  TRITANOPIA
+}
+
+enum DarkThemePreset {
+  DEFAULT
+  DIMMED
+  COLORBLIND
+  TRITANOPIA
+}
+
+enum SingleThemeChoice {
+  LIGHT_DEFAULT
+  LIGHT_COLORBLIND
+  LIGHT_TRITANOPIA
+  DARK_DEFAULT
+  DARK_COLORBLIND
+  DARK_TRITANOPIA
+  DARK_SOFT
+}
+
 enum EnvironmentType {
   PERSONAL
   ORGANIZATION
@@ -63,12 +93,23 @@ enum MaterialStatus {
   ERROR
 }
 
-enum GenerationStatus {
+enum MaterialIndexStatus {
   PENDING
-  PLANNING
-  GENERATING
+  INDEXING
   READY
   ERROR
+}
+
+enum GenerationStatus {
+  QUEUED
+  PENDING
+  PLANNING
+  RETRIEVING
+  GENERATING
+  VALIDATING
+  READY
+  ERROR
+  CANCELLED
 }
 
 enum AssignmentStatus {
@@ -139,17 +180,27 @@ enum AssessmentAiRunStatus {
   FAILED
 }
 
+enum StudentAnalyticsInsightStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+  STALE
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
   name         String
   isActive     Boolean  @default(true)
+  emailVerifiedAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   accounts    Account[]
   auditEvents AuditEvent[] @relation("ActorUserAudit")
+  emailVerificationTokens EmailVerificationToken[]
 
   @@map("users")
 }
@@ -163,6 +214,13 @@ model Account {
   avatarUrl      String?
   slug           String?
   organizationId String?
+  themeMode      ThemeMode         @default(SYSTEM)
+  lightThemePreset LightThemePreset @default(DEFAULT)
+  darkThemePreset DarkThemePreset   @default(DEFAULT)
+  singleThemeChoice SingleThemeChoice @default(DARK_DEFAULT)
+  contrastEnabled Boolean           @default(false)
+  contrastLightEnabled Boolean      @default(false)
+  contrastDarkEnabled Boolean       @default(false)
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -174,7 +232,11 @@ model Account {
   memberships               AccountMembership[]
   roleAssignments           RoleAssignment[]
   materials                 Material[]              @relation("MaterialOwner")
+  materialChunks            MaterialChunk[]
+  knowledgeConcepts         KnowledgeConcept[]
+  knowledgeRelations        KnowledgeRelation[]
   materialFolders           MaterialFolder[]        @relation("MaterialFolderOwner")
+  externalSourceProfiles    ExternalSourceProfile[]
   generationRequests        GenerationRequest[]     @relation("GenerationRequestOwner")
   assignments               Assignment[]            @relation("AssignmentOwner")
   assignmentVersionsAuthored AssignmentVersion[]    @relation("AssignmentVersionAuthor")
@@ -183,6 +245,9 @@ model Account {
   attempts                  Attempt[]               @relation("LearnerAttempts")
   helpRequests              HelpRequest[]           @relation("LearnerHelpRequests")
   assessmentsReviewed       Assessment[]            @relation("ReviewerAssessments")
+  taskBankItems             TaskBankItem[]          @relation("TaskBankOwner")
+  learnerAnalyticsInsights  StudentAnalyticsInsight[] @relation("LearnerAnalyticsInsights")
+  teacherAnalyticsInsights  StudentAnalyticsInsight[] @relation("TeacherAnalyticsInsights")
 
   formalMemberships   FormalEntityMember[]
   targetMemberships   TargetGroupMember[]
@@ -201,6 +266,15 @@ model Session {
   activeUserContextId   String?  @map("activeAccountId")
   signedInUserContextIds String[] @default([]) @map("signedInAccountIds")
   token                 String   @unique
+  ipAddress             String?
+  userAgent             String?
+  countryCode           String?
+  country               String?
+  region                String?
+  city                  String?
+  latitude              Float?
+  longitude             Float?
+  lastSeenAt            DateTime @default(now())
   expiresAt             DateTime
   createdAt             DateTime @default(now())
 
@@ -208,7 +282,24 @@ model Session {
 
   @@index([token])
   @@index([activeUserContextId])
+  @@index([lastSeenAt])
   @@map("sessions")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+  @@map("email_verification_tokens")
 }
 
 model Organization {
@@ -478,6 +569,7 @@ model Material {
   storagePath      String
   extractedText    String?
   status           MaterialStatus @default(PROCESSING)
+  indexStatus      MaterialIndexStatus @default(PENDING)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
@@ -489,6 +581,9 @@ model Material {
   practiceGroup PracticeGroup? @relation(fields: [practiceGroupId], references: [id], onDelete: SetNull)
   folder       MaterialFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   tags         MaterialTag[]
+  chunks       MaterialChunk[]
+  concepts     KnowledgeConcept[]
+  relations    KnowledgeRelation[]
 
   @@index([ownerAccountId])
   @@index([organizationId])
@@ -497,6 +592,7 @@ model Material {
   @@index([targetGroupId])
   @@index([practiceGroupId])
   @@index([folderId])
+  @@index([indexStatus])
   @@map("materials")
 }
 
@@ -531,26 +627,146 @@ model MaterialTag {
   @@map("material_tags")
 }
 
+model MaterialChunk {
+  id             String   @id @default(cuid())
+  materialId     String
+  ownerAccountId String
+  chunkIndex     Int
+  text           String
+  startOffset    Int
+  endOffset      Int
+  embedding      Json?
+  keywords       String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  material     Material              @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  ownerAccount Account               @relation(fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  conceptLinks MaterialChunkConcept[]
+
+  @@index([materialId])
+  @@index([ownerAccountId])
+  @@index([materialId, chunkIndex])
+  @@map("material_chunks")
+}
+
+model KnowledgeConcept {
+  id             String   @id @default(cuid())
+  ownerAccountId String
+  materialId     String?
+  name           String
+  normalizedName String
+  weight         Float    @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ownerAccount      Account                @relation(fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  material          Material?              @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  outgoingRelations KnowledgeRelation[]    @relation("KnowledgeRelationFrom")
+  incomingRelations KnowledgeRelation[]    @relation("KnowledgeRelationTo")
+  chunkLinks        MaterialChunkConcept[]
+
+  @@index([ownerAccountId])
+  @@index([materialId])
+  @@index([ownerAccountId, normalizedName])
+  @@map("knowledge_concepts")
+}
+
+model KnowledgeRelation {
+  id             String   @id @default(cuid())
+  ownerAccountId String
+  materialId     String?
+  fromConceptId  String
+  toConceptId    String
+  relationType   String
+  weight         Float    @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ownerAccount Account          @relation(fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  material     Material?        @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  fromConcept  KnowledgeConcept @relation("KnowledgeRelationFrom", fields: [fromConceptId], references: [id], onDelete: Cascade)
+  toConcept    KnowledgeConcept @relation("KnowledgeRelationTo", fields: [toConceptId], references: [id], onDelete: Cascade)
+
+  @@index([ownerAccountId])
+  @@index([materialId])
+  @@index([fromConceptId])
+  @@index([toConceptId])
+  @@map("knowledge_relations")
+}
+
+model MaterialChunkConcept {
+  id        String   @id @default(cuid())
+  chunkId   String
+  conceptId String
+  score     Float    @default(1)
+  createdAt DateTime @default(now())
+
+  chunk   MaterialChunk    @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  concept KnowledgeConcept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@unique([chunkId, conceptId])
+  @@index([conceptId])
+  @@map("material_chunk_concepts")
+}
+
+model ExternalSourceProfile {
+  id               String   @id @default(cuid())
+  ownerAccountId   String
+  name             String
+  includeWhitelist Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ownerAccount      Account                    @relation(fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  urls              ExternalSourceProfileUrl[]
+  generationRequests GenerationRequest[]
+
+  @@index([ownerAccountId])
+  @@map("external_source_profiles")
+}
+
+model ExternalSourceProfileUrl {
+  id        String   @id @default(cuid())
+  profileId String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile ExternalSourceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@unique([profileId, url])
+  @@map("external_source_profile_urls")
+}
+
 model GenerationRequest {
   id             String           @id @default(cuid())
   ownerAccountId String
   organizationId String?
   institutionId  String?
-  status         GenerationStatus @default(PENDING)
+  externalSourceProfileId String?
+  status         GenerationStatus @default(QUEUED)
   constraints    Json
   materialIds    String[]
+  runToken       Int              @default(1)
+  metadata       Json?
+  cancelRequestedAt DateTime?
+  cancelReason   String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
   ownerAccount Account          @relation("GenerationRequestOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
   organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   institution Institution?      @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  externalSourceProfile ExternalSourceProfile? @relation(fields: [externalSourceProfileId], references: [id], onDelete: SetNull)
   plan         GenerationPlan?
   result       GenerationResult?
 
   @@index([ownerAccountId])
   @@index([organizationId])
   @@index([institutionId])
+  @@index([externalSourceProfileId])
   @@map("generation_requests")
 }
 
@@ -599,6 +815,7 @@ model Assignment {
   generationResult GenerationResult? @relation(fields: [generationResultId], references: [id], onDelete: SetNull)
   versions        AssignmentVersion[]
   items           AssignmentItem[]
+  tags            AssignmentTag[]
   distributions   AssignmentDistribution[]
 
   @@index([ownerAccountId])
@@ -637,6 +854,47 @@ model AssignmentItem {
 
   @@index([assignmentId])
   @@map("assignment_items")
+}
+
+model AssignmentTag {
+  id           String @id @default(cuid())
+  assignmentId String
+  key          String
+  value        String
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+  @@index([key, value])
+  @@map("assignment_tags")
+}
+
+model TaskBankItem {
+  id             String   @id @default(cuid())
+  ownerAccountId String
+  title          String
+  content        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ownerAccount Account       @relation("TaskBankOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
+  tags         TaskBankTag[]
+
+  @@index([ownerAccountId])
+  @@map("task_bank_items")
+}
+
+model TaskBankTag {
+  id             String @id @default(cuid())
+  taskBankItemId String
+  key            String
+  value          String
+
+  taskBankItem TaskBankItem @relation(fields: [taskBankItemId], references: [id], onDelete: Cascade)
+
+  @@index([taskBankItemId])
+  @@index([key, value])
+  @@map("task_bank_tags")
 }
 
 model AssignmentDistribution {
@@ -810,4 +1068,30 @@ model AssessmentAiRun {
   @@index([trigger])
   @@index([inputHash])
   @@map("assessment_ai_runs")
+}
+
+model StudentAnalyticsInsight {
+  id               String                       @id @default(cuid())
+  learnerAccountId String
+  teacherAccountId String?
+  subjectKey       String?
+  period           String                       @default("all_time")
+  metricsJson      Json?
+  recommendationJson Json?
+  status           StudentAnalyticsInsightStatus @default(QUEUED)
+  error            String?
+  generatedAt      DateTime?
+  staleAt          DateTime?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  learnerAccount Account  @relation("LearnerAnalyticsInsights", fields: [learnerAccountId], references: [id], onDelete: Cascade)
+  teacherAccount Account? @relation("TeacherAnalyticsInsights", fields: [teacherAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([learnerAccountId, teacherAccountId, subjectKey, period])
+  @@index([learnerAccountId])
+  @@index([teacherAccountId])
+  @@index([subjectKey])
+  @@index([status])
+  @@map("student_analytics_insights")
 }

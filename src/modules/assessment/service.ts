@@ -1,22 +1,38 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { auditLog } from "@/lib/audit/logger";
-import { NotFoundError, ForbiddenError, ValidationError } from "@/lib/errors";
+import { resolveAiModel } from "@/lib/ai/models";
+import {
+  NotFoundError,
+  ForbiddenError,
+  ValidationError,
+  QueueUnavailableError,
+} from "@/lib/errors";
+import { normalizeMaxScoreByQuestionType } from "@/lib/question-scoring";
 import type { AssignmentContent, AssignmentItemContent, RubricCriterion } from "@/modules/assignments/types";
 import type { AttemptAnswer } from "@/modules/completion/types";
 import { autoCheck } from "./auto-check";
 import { analyzeAttemptWithAi, ASSESSMENT_AI_PROMPT_VERSION } from "./ai-analysis";
-import { enqueueAssessmentAiJob } from "./queue";
+import { ensureAssessmentWorkerAutoStarted } from "./auto-worker";
+import {
+  enqueueAssessmentAiJob,
+  removeAssessmentAiJob,
+  type AssessmentAiJobData,
+} from "./queue";
 import type {
   AssessmentDetail,
   StudentResult,
+  StudentAiReview,
   AssessmentAiRunSummary,
   AssessmentAiRunTrigger,
   ItemScoreOverride,
   ConfidenceLevel,
 } from "./types";
+import { enqueueInsightRecomputeForPublishedAttempt } from "@/modules/analytics/insight-service";
 
-const DEFAULT_AI_MODEL = process.env.AI_MODEL ?? "gpt-4o-mini";
+const DEFAULT_AI_MODEL = resolveAiModel();
+const DEFAULT_ASSESSMENT_AI_ENQUEUE_TIMEOUT_MS = 1_500;
+const ASSESSMENT_AI_CANCELLED_ERROR = "AI analysis cancelled by teacher";
 
 // -- Get or Create Assessment (deterministic auto-check only) --
 
@@ -145,6 +161,95 @@ export async function triggerAssessmentAnalysis(
   return toAssessmentDetail(refreshed!);
 }
 
+export async function cancelAssessmentAnalysis(
+  attemptId: string,
+  reviewerAccountId: string,
+  traceId: string
+): Promise<AssessmentDetail> {
+  const assessment = await prisma.assessment.findUnique({
+    where: { attemptId },
+    include: { latestAiRun: true },
+  });
+
+  if (!assessment) throw new NotFoundError("Assessment not found");
+  if (assessment.reviewerAccountId !== reviewerAccountId) throw new ForbiddenError();
+
+  const latestRun = assessment.latestAiRun;
+  const isActive =
+    latestRun !== null &&
+    (latestRun.status === "QUEUED" || latestRun.status === "PROCESSING");
+
+  if (!isActive) {
+    return toAssessmentDetail(assessment);
+  }
+
+  let removedFromQueue = false;
+  if (latestRun.status === "QUEUED") {
+    try {
+      removedFromQueue = await removeAssessmentAiJob(latestRun.id);
+    } catch (error) {
+      console.warn("[assessment-ai] failed to remove queued job during cancellation", {
+        runId: latestRun.id,
+        attemptId,
+        traceId,
+        error: summarizeQueueError(error),
+      });
+    }
+  }
+
+  const cancelledAt = new Date();
+  const cancelled = await prisma.$transaction(async (tx) => {
+    const runUpdate = await tx.assessmentAiRun.updateMany({
+      where: {
+        id: latestRun.id,
+        status: { in: ["QUEUED", "PROCESSING"] },
+      },
+      data: {
+        status: "FAILED",
+        error: ASSESSMENT_AI_CANCELLED_ERROR,
+        completedAt: cancelledAt,
+      },
+    });
+
+    if (runUpdate.count === 0) return false;
+
+    await tx.assessment.update({
+      where: { id: assessment.id },
+      data: {
+        autoCheckStatus: "FAILED",
+        confidence: null,
+        warnings: [ASSESSMENT_AI_CANCELLED_ERROR],
+        latestAiRunId: latestRun.id,
+      },
+    });
+
+    return true;
+  });
+
+  if (cancelled) {
+    await auditLog({
+      actorAccountId: reviewerAccountId,
+      action: "assessment.ai_cancelled",
+      entityType: "AssessmentAiRun",
+      entityId: latestRun.id,
+      context: {
+        assessmentId: assessment.id,
+        attemptId,
+        previousStatus: latestRun.status,
+        removedFromQueue,
+      },
+      traceId,
+    });
+  }
+
+  const refreshed = await prisma.assessment.findUnique({
+    where: { id: assessment.id },
+    include: { latestAiRun: true },
+  });
+
+  return toAssessmentDetail(refreshed!);
+}
+
 export async function processAssessmentAiJob(opts: {
   runId: string;
   traceId: string;
@@ -180,6 +285,15 @@ export async function processAssessmentAiJob(opts: {
     return;
   }
 
+  if (isCancelledAssessmentRun(run)) {
+    console.info("[assessment-ai] skipped cancelled run", {
+      runId: run.id,
+      assessmentId: run.assessmentId,
+      traceId: opts.traceId,
+    });
+    return;
+  }
+
   const traceId = opts.traceId || run.traceId || "unknown";
   console.info("[assessment-ai] processing started", {
     runId: run.id,
@@ -189,14 +303,26 @@ export async function processAssessmentAiJob(opts: {
     traceId,
   });
 
-  await prisma.$transaction(async (tx) => {
-    await tx.assessmentAiRun.update({
-      where: { id: run.id },
+  const processingStarted = await prisma.$transaction(async (tx) => {
+    const promoted = await tx.assessmentAiRun.updateMany({
+      where: {
+        id: run.id,
+        OR: [
+          { status: "QUEUED" },
+          {
+            status: "FAILED",
+            error: { not: ASSESSMENT_AI_CANCELLED_ERROR },
+          },
+        ],
+      },
       data: {
         status: "PROCESSING",
         startedAt: new Date(),
+        error: null,
       },
     });
+
+    if (promoted.count === 0) return false;
 
     await tx.assessment.update({
       where: { id: run.assessmentId },
@@ -205,7 +331,18 @@ export async function processAssessmentAiJob(opts: {
         latestAiRunId: run.id,
       },
     });
+
+    return true;
   });
+
+  if (!processingStarted) {
+    console.info("[assessment-ai] processing skipped due to non-runnable status", {
+      runId: run.id,
+      assessmentId: run.assessmentId,
+      traceId,
+    });
+    return;
+  }
 
   await auditLog({
     actorAccountId: run.assessment.reviewerAccountId,
@@ -230,6 +367,21 @@ export async function processAssessmentAiJob(opts: {
       autoCheckResult: deterministic,
       modelId: run.model,
     });
+    const preserveManualMaxGrade =
+      run.assessment.status === "REVIEWED" || run.assessment.status === "PUBLISHED";
+
+    const runStateBeforePersist = await prisma.assessmentAiRun.findUnique({
+      where: { id: run.id },
+      select: { status: true, error: true },
+    });
+    if (isCancelledAssessmentRun(runStateBeforePersist)) {
+      console.info("[assessment-ai] processing result discarded due to cancellation", {
+        runId: run.id,
+        assessmentId: run.assessmentId,
+        traceId,
+      });
+      return;
+    }
 
     const persisted = await prisma.$transaction(async (tx) => {
       const updatedRun = await tx.assessmentAiRun.update({
@@ -260,7 +412,9 @@ export async function processAssessmentAiJob(opts: {
           warnings: recommendation.warnings,
           latestAiRunId: run.id,
           status: run.assessment.status === "PENDING" ? "AUTO_CHECKED" : run.assessment.status,
-          maxGrade: run.assessment.maxGrade ?? recommendation.maxTotal,
+          maxGrade: preserveManualMaxGrade
+            ? run.assessment.maxGrade
+            : recommendation.maxTotal,
         },
         select: {
           id: true,
@@ -302,6 +456,19 @@ export async function processAssessmentAiJob(opts: {
       traceId,
     });
   } catch (error) {
+    const runStateOnError = await prisma.assessmentAiRun.findUnique({
+      where: { id: run.id },
+      select: { status: true, error: true },
+    });
+    if (isCancelledAssessmentRun(runStateOnError)) {
+      console.info("[assessment-ai] processing aborted after cancellation", {
+        runId: run.id,
+        assessmentId: run.assessmentId,
+        traceId,
+      });
+      return;
+    }
+
     const errorMessage = error instanceof Error ? error.message : "Unknown AI analysis error";
 
     await prisma.$transaction(async (tx) => {
@@ -421,6 +588,33 @@ export async function publishAssessment(
     include: { latestAiRun: true },
   });
 
+  try {
+    await enqueueInsightRecomputeForPublishedAttempt({
+      attemptId,
+      traceId: `assessment_publish_${attemptId}`,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("[student-analytics-insight] enqueue failed after publish", {
+      attemptId,
+      assessmentId: updated.id,
+      reviewerAccountId,
+      error: message,
+    });
+
+    await auditLog({
+      actorAccountId: reviewerAccountId,
+      action: "analytics.insight_enqueue_failed",
+      entityType: "Assessment",
+      entityId: updated.id,
+      context: {
+        attemptId,
+        error: message,
+      },
+      traceId: `assessment_publish_${attemptId}`,
+    });
+  }
+
   return toAssessmentDetail(updated);
 }
 
@@ -449,6 +643,7 @@ export async function getStudentResult(
     grade: assessment.manualGrade,
     maxGrade: assessment.maxGrade,
     comment: assessment.comment,
+    aiReview: toStudentAiReview(assessment.aiRecommendation),
     publishedAt: assessment.publishedAt!,
   };
 }
@@ -589,7 +784,7 @@ async function enqueueAssessmentRun(opts: {
     },
   });
 
-  await enqueueAssessmentAiJob({
+  const jobData = {
     runId: run.id,
     assessmentId: opts.assessmentId,
     attemptId: opts.attemptId,
@@ -597,7 +792,10 @@ async function enqueueAssessmentRun(opts: {
     trigger: opts.trigger,
     traceId: opts.traceId,
     idempotencyKey: `${opts.assessmentId}:${inputHash}:${opts.trigger}`,
-  });
+  } satisfies AssessmentAiJobData;
+
+  await ensureAssessmentWorkerAutoStarted();
+  await enqueueAssessmentAiJobWithTimeout(jobData);
 
   await auditLog({
     actorAccountId: opts.reviewerAccountId,
@@ -622,6 +820,111 @@ async function enqueueAssessmentRun(opts: {
   });
 }
 
+async function enqueueAssessmentAiJobWithTimeout(data: AssessmentAiJobData): Promise<void> {
+  const timeoutMs = getAssessmentAiEnqueueTimeoutMs();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let settled = false;
+
+  await new Promise<void>((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(
+        new QueueUnavailableError(
+          `Assessment queue enqueue timed out after ${timeoutMs}ms`
+        )
+      );
+    }, timeoutMs);
+
+    enqueueAssessmentAiJob(data)
+      .then(() => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        resolve();
+      })
+      .catch((error: unknown) => {
+        if (timeoutId) clearTimeout(timeoutId);
+
+        if (settled) {
+          console.warn(
+            "[assessment-ai] enqueue failed after timeout",
+            summarizeQueueError(error)
+          );
+          return;
+        }
+
+        settled = true;
+        if (isQueueConnectivityError(error)) {
+          reject(
+            new QueueUnavailableError(
+              "Assessment queue service is unavailable. Please retry shortly."
+            )
+          );
+          return;
+        }
+
+        reject(error);
+      });
+  });
+}
+
+function getAssessmentAiEnqueueTimeoutMs(): number {
+  const raw = process.env.ASSESSMENT_AI_ENQUEUE_TIMEOUT_MS?.trim();
+  if (!raw) return DEFAULT_ASSESSMENT_AI_ENQUEUE_TIMEOUT_MS;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_ASSESSMENT_AI_ENQUEUE_TIMEOUT_MS;
+  }
+
+  return parsed;
+}
+
+function isCancelledAssessmentRun(
+  run:
+    | { status: string; error: string | null }
+    | null
+    | undefined
+): boolean {
+  return (
+    run?.status === "FAILED" && run.error === ASSESSMENT_AI_CANCELLED_ERROR
+  );
+}
+
+function isQueueConnectivityError(error: unknown): boolean {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code.toUpperCase()
+      : "";
+
+  const connectivityCodes = new Set([
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ENOTFOUND",
+    "EHOSTUNREACH",
+    "ECONNABORTED",
+  ]);
+
+  if (connectivityCodes.has(code)) return true;
+
+  const message = summarizeQueueError(error).toLowerCase();
+  return (
+    message.includes("redis") ||
+    message.includes("connection is closed") ||
+    message.includes("max retries per request")
+  );
+}
+
+function summarizeQueueError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 function buildAssessmentInputHash(opts: {
   attemptId: string;
   attemptUpdatedAt: Date;
@@ -639,7 +942,7 @@ function buildAssessmentInputHash(opts: {
       type: item.type,
       question: item.question,
       expectedAnswer: item.expectedAnswer,
-      maxScore: item.maxScore ?? 1,
+      maxScore: normalizeMaxScoreByQuestionType(item.type, item.maxScore),
       rubricCriteria: item.rubricCriteria ?? [],
     })),
   };
@@ -655,10 +958,7 @@ function normalizeAssignmentContent(content: AssignmentContent): AssignmentConte
 }
 
 function normalizeItem(item: AssignmentItemContent): AssignmentItemContent {
-  const maxScore =
-    typeof item.maxScore === "number" && Number.isFinite(item.maxScore) && item.maxScore > 0
-      ? item.maxScore
-      : 1;
+  const maxScore = normalizeMaxScoreByQuestionType(item.type, item.maxScore);
 
   let rubricCriteria: RubricCriterion[];
   if (item.rubricCriteria && item.rubricCriteria.length > 0) {
@@ -696,6 +996,63 @@ function normalizeItem(item: AssignmentItemContent): AssignmentItemContent {
     ...item,
     maxScore,
     rubricCriteria,
+  };
+}
+
+function toStudentAiReview(raw: unknown): StudentAiReview | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+
+  const gradeRationale =
+    typeof record.gradeRationale === "string" ? record.gradeRationale : null;
+  const reviewPriority = Array.isArray(record.reviewPriority)
+    ? record.reviewPriority.filter((item): item is string => typeof item === "string")
+    : [];
+  const itemsRaw = Array.isArray(record.items) ? record.items : [];
+
+  if (!gradeRationale) return null;
+
+  const items = itemsRaw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const itemOrder =
+        typeof row.itemOrder === "number" ? Math.trunc(row.itemOrder) : null;
+      if (!itemOrder || itemOrder <= 0) return null;
+      return {
+        itemOrder,
+        whatIsCorrect: Array.isArray(row.whatIsCorrect)
+          ? row.whatIsCorrect.filter(
+              (value): value is string => typeof value === "string"
+            )
+          : [],
+        whatIsIncorrect: Array.isArray(row.whatIsIncorrect)
+          ? row.whatIsIncorrect.filter(
+              (value): value is string => typeof value === "string"
+            )
+          : [],
+        whatIsMissing: Array.isArray(row.whatIsMissing)
+          ? row.whatIsMissing.filter(
+              (value): value is string => typeof value === "string"
+            )
+          : [],
+      };
+    })
+    .filter(
+      (
+        item
+      ): item is {
+        itemOrder: number;
+        whatIsCorrect: string[];
+        whatIsIncorrect: string[];
+        whatIsMissing: string[];
+      } => item !== null
+    );
+
+  return {
+    gradeRationale,
+    reviewPriority,
+    items,
   };
 }
 

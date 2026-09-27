@@ -59,3 +59,10 @@ export class RateLimitError extends AppError {
     this.name = "RateLimitError";
   }
 }
+
+export class QueueUnavailableError extends AppError {
+  constructor(message = "Queue service is unavailable") {
+    super(message, "QUEUE_UNAVAILABLE", 503);
+    this.name = "QueueUnavailableError";
+  }
+}

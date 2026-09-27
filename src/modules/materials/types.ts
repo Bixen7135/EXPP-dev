@@ -69,6 +69,7 @@ export interface MaterialSummary {
   mimeType: string;
   fileSize: number;
   status: string;
+  indexStatus: "PENDING" | "INDEXING" | "READY" | "ERROR";
   createdAt: Date;
   updatedAt: Date;
   folderId: string | null;

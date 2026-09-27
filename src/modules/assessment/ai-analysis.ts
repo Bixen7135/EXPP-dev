@@ -1,5 +1,6 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 import { aiGenerate } from "@/lib/ai/gateway";
+import { normalizeMaxScoreByQuestionType } from "@/lib/question-scoring";
 import type { AssignmentItemContent, RubricCriterion } from "@/modules/assignments/types";
 import type { AttemptAnswer } from "@/modules/completion/types";
 import { ValidationError } from "@/lib/errors";
@@ -74,15 +75,146 @@ export async function analyzeAttemptWithAi(
     temperature: 0.2,
   });
 
-  let parsed: z.infer<typeof recommendationSchema>;
-  try {
-    const raw = JSON.parse(result.text);
-    parsed = recommendationSchema.parse(raw);
-  } catch {
-    throw new ValidationError("Failed to parse AI assessment recommendation");
-  }
+  const parsed = await parseRecommendationResponse(result.text);
 
   return normalizeRecommendation(parsed, promptItems);
+}
+
+async function parseRecommendationResponse(
+  rawText: string
+): Promise<z.infer<typeof recommendationSchema>> {
+  const direct = tryParseRecommendation(rawText);
+  if (direct) return direct;
+
+  const repaired = await aiGenerate({
+    messages: [
+      {
+        role: "system",
+        content:
+          "Convert the input into valid JSON only. Return ONLY JSON object matching the schema.",
+      },
+      {
+        role: "user",
+        content: [
+          "Schema:",
+          JSON.stringify({
+            gradeRationale: "string",
+            reviewPriority: ["string"],
+            items: [
+              {
+                itemOrder: 1,
+                recommendedScore: 0,
+                confidenceValue: 0.5,
+                riskFlags: ["string"],
+                whatIsCorrect: ["string"],
+                whatIsIncorrect: ["string"],
+                whatIsMissing: ["string"],
+                teacherFacingComment: "string",
+              },
+            ],
+          }),
+          "",
+          "Input to repair:",
+          rawText,
+        ].join("\n"),
+      },
+    ],
+    maxTokens: 2400,
+    temperature: 0,
+  });
+
+  const repairedParsed = tryParseRecommendation(repaired.text);
+  if (repairedParsed) return repairedParsed;
+
+  throw new ValidationError("Failed to parse AI assessment recommendation");
+}
+
+function tryParseRecommendation(
+  rawText: string
+): z.infer<typeof recommendationSchema> | null {
+  const candidates = buildJsonCandidates(rawText);
+  for (const candidate of candidates) {
+    try {
+      let parsed = JSON.parse(candidate) as unknown;
+      if (typeof parsed === "string") {
+        parsed = JSON.parse(parsed) as unknown;
+      }
+      return recommendationSchema.parse(parsed);
+    } catch {
+      // Try next candidate shape.
+    }
+  }
+
+  return null;
+}
+
+function buildJsonCandidates(rawText: string): string[] {
+  const trimmed = rawText.trim();
+  const candidates: string[] = [];
+
+  if (trimmed.length > 0) {
+    candidates.push(trimmed);
+  }
+
+  const fencedRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+  for (const match of trimmed.matchAll(fencedRegex)) {
+    const block = match[1]?.trim();
+    if (block) candidates.push(block);
+  }
+
+  const topLevelObject = extractTopLevelJsonObject(trimmed);
+  if (topLevelObject) candidates.push(topLevelObject);
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(trimmed.slice(firstBrace, lastBrace + 1).trim());
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+function extractTopLevelJsonObject(text: string): string | null {
+  let startIndex = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{") {
+      if (depth === 0) startIndex = i;
+      depth += 1;
+      continue;
+    }
+
+    if (ch === "}") {
+      if (depth === 0) continue;
+      depth -= 1;
+      if (depth === 0 && startIndex !== -1) {
+        return text.slice(startIndex, i + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
 function normalizeRecommendation(
@@ -189,10 +321,7 @@ function buildUserPrompt(items: NormalizedPromptItem[]): string {
 }
 
 function getMaxScore(item: AssignmentItemContent): number {
-  if (typeof item.maxScore === "number" && Number.isFinite(item.maxScore) && item.maxScore > 0) {
-    return item.maxScore;
-  }
-  return 1;
+  return normalizeMaxScoreByQuestionType(item.type, item.maxScore);
 }
 
 function normalizeRubric(item: AssignmentItemContent): RubricCriterion[] {

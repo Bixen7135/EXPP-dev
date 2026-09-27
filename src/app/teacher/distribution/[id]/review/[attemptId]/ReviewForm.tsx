@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AssessmentDetail } from "@/modules/assessment/types";
 
@@ -12,11 +12,15 @@ interface Props {
 
 const AUTO_STATUS_COLORS: Record<string, string> = {
   NOT_STARTED: "bg-gray-100 text-gray-600",
-  QUEUED: "bg-amber-100 text-amber-700",
+  QUEUED: "bg-slate-800 text-slate-300",
   PROCESSING: "bg-indigo-100 text-indigo-700",
   READY: "bg-emerald-100 text-emerald-700",
   FAILED: "bg-red-100 text-red-700",
 };
+
+const ACTIVE_AUTO_CHECK_STATUSES = new Set(["QUEUED", "PROCESSING"]);
+const AUTO_REFRESH_INTERVAL_MS = 2_500;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
   const router = useRouter();
@@ -37,11 +41,54 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
   const [comment, setComment] = useState(assessment.comment ?? "");
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishConfirm, setPublishConfirm] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState(assessment.status);
 
   const isPublished = status === "PUBLISHED";
+  const canCancelAnalysis =
+    !isPublished &&
+    (assessment.autoCheckStatus === "QUEUED" || assessment.autoCheckStatus === "PROCESSING");
+  const recommendedGrade = assessment.aiRecommendation?.recommendedTotal;
+  const recommendedMaxGrade = assessment.aiRecommendation?.maxTotal;
+  const isAiRecommendationReady =
+    assessment.latestAiRun?.status === "READY" && assessment.aiRecommendation !== null;
+
+  useEffect(() => {
+    if (!ACTIVE_AUTO_CHECK_STATUSES.has(assessment.autoCheckStatus)) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, AUTO_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [assessment.autoCheckStatus, router]);
+
+  useEffect(() => {
+    if (assessment.manualGrade !== null) {
+      setGrade(String(assessment.manualGrade));
+    } else if (isAiRecommendationReady && recommendedGrade !== undefined) {
+      setGrade(String(recommendedGrade));
+    }
+
+    if (assessment.maxGrade !== null) {
+      setMaxGrade(String(assessment.maxGrade));
+    } else if (isAiRecommendationReady && recommendedMaxGrade !== undefined) {
+      setMaxGrade(String(recommendedMaxGrade));
+    }
+  }, [
+    assessment.manualGrade,
+    assessment.maxGrade,
+    recommendedGrade,
+    recommendedMaxGrade,
+    assessment.latestAiRun?.id,
+    assessment.latestAiRun?.status,
+    isAiRecommendationReady,
+  ]);
 
   async function handleReview(e: React.FormEvent) {
     e.preventDefault();
@@ -77,9 +124,12 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
   async function handleAnalyze() {
     setError(null);
     setAnalyzing(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       const res = await fetch(`/api/assessment/${attemptId}/analyze`, {
         method: "POST",
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -87,20 +137,48 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
         return;
       }
       router.refresh();
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Please try again.");
+        return;
+      }
       setError("Network error");
     } finally {
+      window.clearTimeout(timeoutId);
       setAnalyzing(false);
+    }
+  }
+
+  async function handleCancelAnalyze() {
+    setError(null);
+    setCanceling(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(`/api/assessment/${attemptId}/cancel`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to cancel AI analysis");
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Please try again.");
+        return;
+      }
+      setError("Network error");
+    } finally {
+      window.clearTimeout(timeoutId);
+      setCanceling(false);
     }
   }
 
   async function handlePublish() {
     setError(null);
-    const confirmed = window.confirm(
-      "Publish this result? The student will be able to see their grade and feedback."
-    );
-    if (!confirmed) return;
-
     setPublishing(true);
     try {
       const res = await fetch(`/api/assessment/${attemptId}/publish`, {
@@ -111,6 +189,7 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
         setError(data.error ?? "Failed to publish");
         return;
       }
+      setPublishConfirm(false);
       setStatus(data.data.status);
       router.push(`/teacher/distribution/${distributionId}/review/${attemptId}`);
       router.refresh();
@@ -123,9 +202,9 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 space-y-3">
+      <div className="bg-[color:var(--color-blue-500)]/10 border border-[color:var(--color-blue-500)]/25 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-medium text-blue-900 text-sm">AI Assessment Assistant</h3>
+          <h3 className="font-medium text-[color:var(--color-blue-100)] text-sm">AI Assessment Assistant</h3>
           <span
             className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
               AUTO_STATUS_COLORS[assessment.autoCheckStatus] ?? "bg-gray-100 text-gray-600"
@@ -136,7 +215,7 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
         </div>
 
         {assessment.latestAiRun && (
-          <p className="text-xs text-blue-700">
+          <p className="text-xs text-[color:var(--color-blue-200)]">
             Latest run: {assessment.latestAiRun.status} ({assessment.latestAiRun.trigger})
             {assessment.latestAiRun.confidence ? ` · confidence: ${assessment.latestAiRun.confidence}` : ""}
           </p>
@@ -144,14 +223,14 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
 
         {assessment.aiRecommendation ? (
           <div className="space-y-2">
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-[color:var(--color-blue-200)]">
               Recommended score: <strong>{assessment.aiRecommendation.recommendedTotal}</strong> /{" "}
               {assessment.aiRecommendation.maxTotal}
               {" "}(confidence: {assessment.aiRecommendation.confidence})
             </p>
-            <p className="text-xs text-blue-700">{assessment.aiRecommendation.gradeRationale}</p>
+            <p className="text-xs text-[color:var(--color-blue-200)]">{assessment.aiRecommendation.gradeRationale}</p>
             {assessment.aiRecommendation.warnings.length > 0 && (
-              <ul className="list-disc pl-5 space-y-1 text-xs text-amber-700">
+              <ul className="list-disc pl-5 space-y-1 text-xs text-[color:var(--color-blue-200)]">
                 {assessment.aiRecommendation.warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
                 ))}
@@ -159,7 +238,7 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
             )}
             <div className="space-y-2">
               {assessment.aiRecommendation.items.map((item) => (
-                <div key={item.itemOrder} className="rounded border border-blue-100 bg-white p-2">
+                <div key={item.itemOrder} className="rounded border border-[color:var(--color-blue-500)]/25 bg-slate-950/30 p-2">
                   <p className="text-xs font-medium text-gray-800">
                     Q{item.itemOrder}: {item.recommendedScore}/{item.maxScore} · {item.confidence}
                   </p>
@@ -169,32 +248,34 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-blue-700">
+          <p className="text-sm text-[color:var(--color-blue-200)]">
             AI recommendation is not ready yet. You can trigger analysis manually.
           </p>
         )}
 
         {!isPublished && (
-          <button
-            type="button"
-            onClick={handleAnalyze}
-            disabled={analyzing}
-            className="px-3 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
-            {analyzing ? "Queueing..." : "Re-run AI Analysis"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={analyzing || canceling}
+              className="px-3 py-2 workspace-primary-action text-white rounded text-sm font-medium  disabled:opacity-50"
+            >
+              {analyzing ? "Queueing..." : "Re-run AI Analysis"}
+            </button>
+            {canCancelAnalysis && (
+              <button
+                type="button"
+                onClick={handleCancelAnalyze}
+                disabled={canceling || analyzing}
+                className="px-3 py-2 bg-rose-600 text-white rounded text-sm font-medium hover:bg-rose-700 disabled:opacity-50"
+              >
+                {canceling ? "Stopping..." : "Stop AI Analysis"}
+              </button>
+            )}
+          </div>
         )}
       </div>
-
-      {assessment.autoCheckResult && (
-        <div className="bg-slate-50 border border-slate-100 rounded-lg p-4 space-y-2">
-          <h3 className="font-medium text-slate-900 text-sm">Deterministic Auto-check</h3>
-          <p className="text-sm text-slate-800">
-            Auto-score: <strong>{assessment.autoCheckResult.autoScore} / {assessment.autoCheckResult.autoMaxScore}</strong>
-            {" "}(objective items)
-          </p>
-        </div>
-      )}
 
       {isPublished ? (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -256,19 +337,31 @@ export function ReviewForm({ attemptId, assessment, distributionId }: Props) {
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 workspace-primary-action text-white rounded text-sm font-medium  disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Review"}
             </button>
             {status === "REVIEWED" && (
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={publishing}
-                className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-              >
-                {publishing ? "Publishing..." : "Publish Result"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPublishConfirm(true)}
+                  disabled={publishing}
+                  className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                >
+                  {publishConfirm ? "Ready to publish" : "Publish Result"}
+                </button>
+                {publishConfirm && (
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={publishing}
+                    className="px-4 py-2 border rounded text-sm font-medium hover:bg-slate-900/60 disabled:opacity-50"
+                  >
+                    {publishing ? "Publishing..." : "Release to student"}
+                  </button>
+                )}
+              </>
             )}
           </div>
 

@@ -1,4 +1,4 @@
-﻿import { notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { resolveSession } from "@/lib/auth/session";
 import { getAssignment } from "@/modules/assignments/service";
@@ -29,7 +29,7 @@ export default async function AssignPage({ params }: Props) {
           Only PUBLISHABLE or ASSIGNED assignments can be distributed. This assignment is{" "}
           <strong>{assignment.status}</strong>.
         </p>
-        <Link href={`/teacher/assignments/${id}/edit`} className="text-blue-600 hover:underline text-sm">
+        <Link href={`/teacher/assignments/${id}/edit`} className="workspace-themed-link hover:underline text-sm">
           Back to editor
         </Link>
       </main>

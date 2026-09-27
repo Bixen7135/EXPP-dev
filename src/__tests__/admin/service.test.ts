@@ -102,7 +102,7 @@ describe("getAuditLog", () => {
     {
       id: "evt_01",
       userId: "teacher_01",
-      action: "auth.login",
+      action: "auth.sign_in",
       entityType: null,
       entityId: null,
       context: null,
