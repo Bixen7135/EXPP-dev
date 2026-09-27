@@ -138,7 +138,7 @@ html[data-theme-mode="dark"] .dashboard-workspace-scope .generate-breadcrumb-act
   color: var(--color-blue-100) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) {
   --color-white: var(--color-slate-50);
   --color-black: var(--color-slate-950);
   --color-gray-50: var(--color-slate-900);
@@ -154,94 +154,94 @@ html[data-theme-mode="dark"] .role-workspace-scope {
   --color-gray-950: var(--color-slate-50);
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope main {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) main {
   width: 100%;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(section, form, li, div).border {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(section, form, li, div).border {
   background-color: rgb(15 23 42 / 0.4);
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.border, .border-b, .border-t, .border-l, .border-r) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.border, .border-b, .border-t, .border-l, .border-r) {
   border-color: var(--color-slate-800);
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.rounded, .rounded-md, .rounded-lg) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.rounded, .rounded-md, .rounded-lg) {
   border-radius: 8px;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-white, .bg-gray-50, .bg-gray-100) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.bg-white, .bg-gray-50, .bg-gray-100) {
   background-color: rgb(15 23 42 / 0.55) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(table) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(table) {
   color: var(--color-slate-300);
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(thead, tr.border-b) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(thead, tr.border-b) {
   border-color: var(--color-slate-800);
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(tbody tr:hover) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(tbody tr:hover) {
   background-color: rgb(15 23 42 / 0.58);
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-blue-50:hover) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-blue-50:hover) {
   background-color: rgb(30 41 59 / 0.72) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(input, select, textarea) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(input, select, textarea) {
   border-color: var(--color-slate-700);
   background-color: var(--color-slate-950);
   color: var(--color-slate-100);
   color-scheme: dark;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(input, select, textarea):focus {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(input, select, textarea):focus {
   border-color: var(--color-blue-500);
   outline: 2px solid rgb(59 130 246 / 0.38);
   outline-offset: 1px;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(button, a) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(button, a) {
   transition-property: color, background-color, border-color, opacity, box-shadow, transform;
   transition-duration: 150ms;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(button, a):focus-visible {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(button, a):focus-visible {
   outline: 2px solid var(--color-blue-400);
   outline-offset: 2px;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(button:disabled, input:disabled, select:disabled, textarea:disabled) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(button:disabled, input:disabled, select:disabled, textarea:disabled) {
   cursor: not-allowed;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900) {
   color: var(--color-blue-300) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.text-green-700, .text-green-800, .text-green-900, .text-emerald-700, .text-emerald-800, .text-emerald-900) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.text-green-700, .text-green-800, .text-green-900, .text-emerald-700, .text-emerald-800, .text-emerald-900) {
   color: var(--color-emerald-400) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.text-red-700, .text-red-800, .text-red-900) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.text-red-700, .text-red-800, .text-red-900) {
   color: var(--color-red-300) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-blue-50, .bg-blue-100) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.bg-blue-50, .bg-blue-100) {
   background-color: rgb(30 64 175 / 0.35) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-green-100, .bg-emerald-100) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.bg-green-100, .bg-emerald-100) {
   background-color: rgb(6 78 59 / 0.45) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope :is(.bg-red-100, .bg-rose-100) {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) :is(.bg-red-100, .bg-rose-100) {
   background-color: rgb(127 29 29 / 0.45) !important;
 }
 
-html[data-theme-mode="dark"] .role-workspace-scope .generate-breadcrumb-active {
+html[data-theme-mode="dark"] :is(.dashboard-workspace-scope, .role-workspace-scope) .generate-breadcrumb-active {
   background-color: var(--color-blue-900) !important;
   color: var(--color-blue-100) !important;
 }
